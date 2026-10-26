@@ -33,6 +33,8 @@ function Need([string]$cmd, [string]$wingetId, [string]$name) {
 
 try {
   $pkgName = 'dsh-island'
+  # 只对本脚本使用官方源：国内镜像是只读的，不能登录发布。不改动你的全局 npm 设置。
+  $reg = 'https://registry.npmjs.org/'
   $version = (Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
 
   Step '检查 Git、GitHub CLI、Node.js'
@@ -77,23 +79,23 @@ try {
   Done "GitHub：$url"
 
   Step '登录 npm（浏览器）'
-  npm whoami *> $null
+  npm whoami --registry $reg *> $null
   if ($LASTEXITCODE -ne 0) {
-    npm login --auth-type=web
+    npm login --auth-type=web --registry $reg
     if ($LASTEXITCODE -ne 0) { Fail 'npm 登录没有完成。' }
   }
-  $npmUser = (npm whoami).Trim()
+  $npmUser = (npm whoami --registry $reg).Trim()
   Done "已登录：$npmUser"
 
   Step "发布 $pkgName@$version 到 npm"
-  $existing = (npm view "$pkgName@$version" version 2>$null)
+  $existing = (npm view "$pkgName@$version" version --registry $reg 2>$null)
   if ($existing) {
     Done "npm 上已经有 $version，跳过发布。"
   } else {
-    $owner = (npm view $pkgName maintainers 2>$null)
+    $owner = (npm view $pkgName maintainers --registry $reg 2>$null)
     if ($owner -and ($owner -notmatch [regex]::Escape($npmUser))) { Fail "npm 上的 $pkgName 属于别人，请把 package.json 的 name 改成例如 @$npmUser/$pkgName 后重试。" }
-    $published = { $v = (npm view "$pkgName@$version" version 2>$null); [bool]$v }
-    Retry { npm publish --access public } '发布到 npm' $published
+    $published = { $v = (npm view "$pkgName@$version" version --registry $reg 2>$null); [bool]$v }
+    Retry { npm publish --access public --registry $reg } '发布到 npm' $published
     if (-not $script:RetryOk) { Fail 'npm 发布失败（如果开启了两步验证，请按提示在浏览器里确认后重新运行）。' }
   }
   Done "npm：https://www.npmjs.com/package/$pkgName"
