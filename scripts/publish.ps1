@@ -10,6 +10,17 @@ function Step([string]$text) { Write-Host ''; Write-Host "== $text" -ForegroundC
 function Done([string]$text) { Write-Host "   $text" -ForegroundColor Green }
 function Fail([string]$text) { throw $text }
 function Refresh-Path { $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }
+# 结果写在 $script:RetryOk，命令自己的输出照常显示在窗口里。
+function Retry([scriptblock]$Action, [string]$What, [scriptblock]$Already = { $false }) {
+  $script:RetryOk = $false
+  for ($i = 1; $i -le 3; $i++) {
+    if ([bool](& $Already)) { $script:RetryOk = $true; return }
+    & $Action
+    if ($LASTEXITCODE -eq 0) { $script:RetryOk = $true; return }
+    if ([bool](& $Already)) { $script:RetryOk = $true; return }
+    if ($i -lt 3) { Write-Host "   $What 没有成功（第 $i 次），5 秒后重试…" -ForegroundColor Yellow; Start-Sleep -Seconds 5 }
+  }
+}
 function Need([string]$cmd, [string]$wingetId, [string]$name) {
   if (Get-Command $cmd -ErrorAction SilentlyContinue) { return }
   Write-Host "   没有找到 $name。" -ForegroundColor Yellow
@@ -47,23 +58,21 @@ try {
   Step "准备仓库 $repo"
   node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.author=p.author||process.argv[1];p.repository={type:'git',url:'git+'+process.argv[2]+'.git'};p.homepage=process.argv[2]+'#readme';p.bugs={url:process.argv[2]+'/issues'};fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')" $login $url
   if (-not (Test-Path -LiteralPath (Join-Path $root '.git'))) { git init -b main | Out-Null }
+  git config core.autocrlf false
   if (-not (git config user.name)) { git config user.name $login }
   if (-not (git config user.email)) { git config user.email "$userId+$login@users.noreply.github.com" }
   git add -A
   git diff --cached --quiet
   if ($LASTEXITCODE -ne 0) { git commit -q -m "DeepSeek Island $version"; if ($LASTEXITCODE -ne 0) { Fail 'git 提交失败。' } }
-  gh repo view $repo *> $null
-  if ($LASTEXITCODE -ne 0) {
-    gh repo create $repo --public --description 'DeepSeek Harness desktop dynamic island plugin (community)' --homepage "https://www.npmjs.com/package/$pkgName" --source . --remote origin --push
-    if ($LASTEXITCODE -ne 0) { Fail "创建仓库 $repo 失败。" }
-  } else {
-    git remote get-url origin *> $null
-    if ($LASTEXITCODE -ne 0) { git remote add origin "$url.git" }
-    git push -u origin HEAD:main
-    if ($LASTEXITCODE -ne 0) { Fail "推送到 $repo 失败：远端可能已有不同的提交。" }
-  }
+  $repoExists = { gh repo view $repo *> $null; $LASTEXITCODE -eq 0 }
+  Retry { gh repo create $repo --public --description 'DeepSeek Harness desktop dynamic island plugin (community)' --homepage "https://www.npmjs.com/package/$pkgName" } '创建 GitHub 仓库' $repoExists
+  if (-not $script:RetryOk) { Fail "创建仓库 $repo 失败，请检查网络或代理后重新运行。" }
+  git remote get-url origin *> $null
+  if ($LASTEXITCODE -ne 0) { git remote add origin "$url.git" }
+  Retry { git push -u origin HEAD:main } '推送代码'
+  if (-not $script:RetryOk) { Fail "推送到 $repo 失败，请检查网络或代理后重新运行。" }
   git tag -f "v$version" | Out-Null
-  git push -f origin "v$version" *> $null
+  Retry { git push -f origin "v$version" *> $null } '推送标签'
   gh repo edit $repo --add-topic deepseek --add-topic deepseek-harness --add-topic dynamic-island --add-topic electron *> $null
   Done "GitHub：$url"
 
@@ -83,8 +92,9 @@ try {
   } else {
     $owner = (npm view $pkgName maintainers 2>$null)
     if ($owner -and ($owner -notmatch [regex]::Escape($npmUser))) { Fail "npm 上的 $pkgName 属于别人，请把 package.json 的 name 改成例如 @$npmUser/$pkgName 后重试。" }
-    npm publish --access public
-    if ($LASTEXITCODE -ne 0) { Fail 'npm 发布失败（如果开启了两步验证，请按提示在浏览器里确认后重试）。' }
+    $published = { $v = (npm view "$pkgName@$version" version 2>$null); [bool]$v }
+    Retry { npm publish --access public } '发布到 npm' $published
+    if (-not $script:RetryOk) { Fail 'npm 发布失败（如果开启了两步验证，请按提示在浏览器里确认后重新运行）。' }
   }
   Done "npm：https://www.npmjs.com/package/$pkgName"
 
