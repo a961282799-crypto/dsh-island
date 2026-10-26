@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>DeepSeek 灵动岛</title><link rel="stylesheet" href="island.css">
+</head>
+<body data-position="top-center" data-motion="full">
+  <div id="stage" class="stage">
+  <main id="island" class="island" data-state="idle" data-shape="idle" data-layout="h" data-expanded="false">
+    <div class="surface">
+      <button id="capsule" class="capsule" aria-label="展开 DeepSeek 灵动岛" aria-expanded="false" aria-controls="panel">
+        <span class="lead" aria-hidden="true">
+          <span class="whale"></span>
+          <span class="spout"><i></i><i></i><i></i></span>
+        </span>
+        <span id="copy" class="copy">
+          <span id="status-label" class="label">随时待命</span>
+          <span id="mini-note" class="sub">DeepSeek Harness</span>
+        </span>
+        <span id="badge" class="badge" hidden></span>
+        <span id="indicator" class="indicator" aria-hidden="true">
+          <span class="ind ind-idle"><i></i></span>
+          <span class="ind ind-thinking"><i></i><i></i><i></i></span>
+          <span class="ind ind-streaming"><i></i><i></i><i></i><i></i><i></i></span>
+          <svg class="ind ind-tools" viewBox="0 0 24 24"><circle class="track" cx="12" cy="12" r="8.5"/><circle class="arc" cx="12" cy="12" r="8.5"/><circle class="core" cx="12" cy="12" r="2.2"/></svg>
+          <span class="ind ind-waiting"><i></i><i></i><b></b></span>
+          <svg class="ind ind-completed" viewBox="0 0 24 24"><circle class="disc" cx="12" cy="12" r="10"/><path class="tick" d="M7.4 12.4l3.1 3.1 6.1-6.4"/></svg>
+          <span class="ind ind-paused"><i></i><i></i></span>
+          <svg class="ind ind-error" viewBox="0 0 24 24"><circle class="disc" cx="12" cy="12" r="10"/><path class="bang" d="M12 7.2v6"/><circle class="dot" cx="12" cy="16.7" r="1.15"/></svg>
+          <span class="ind ind-reconnecting"><i></i><i></i></span>
+          <span class="ind ind-compacting"><i></i><i></i><i></i></span>
+          <svg class="ind ind-offline" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M7 17 17 7"/></svg>
+        </span>
+      </button>
+
+      <section id="panel" class="panel" inert aria-label="任务详情">
+        <form id="ask" class="card ask" hidden autocomplete="off">
+          <div class="ask-top"><span class="ask-dot" aria-hidden="true"></span><span id="ask-title">Agent 在问你</span><span id="ask-step" class="num"></span></div>
+          <p id="ask-question" class="ask-q"></p>
+          <div id="ask-options" class="ask-options" role="group"></div>
+          <input id="ask-custom" class="ask-custom" type="text" maxlength="2000" placeholder="或者输入你自己的回答…" aria-label="自定义回答">
+          <div class="ask-actions"><span id="ask-status" class="ask-status" role="status"></span><button id="ask-skip" type="button" class="ask-skip">跳过</button><button id="ask-next" type="submit" class="ask-next">提交</button></div>
+        </form>
+        <div id="task" class="card task">
+          <div class="task-top"><span id="session-title">DeepSeek Harness</span><time id="elapsed"></time></div>
+          <p id="status-detail">开始一个任务，让想法继续。</p>
+          <div id="plan" class="plan" hidden>
+            <div class="plan-head"><span>计划</span><span id="plan-count" class="num"></span></div>
+            <div class="bar" aria-hidden="true"><i id="plan-bar"></i></div>
+            <div id="plan-current" class="plan-current"></div>
+          </div>
+          <div id="trail" class="trail" aria-label="最近的步骤" hidden></div>
+          <div id="meta" class="meta"></div>
+          <span id="activity-note" class="activity-note"></span>
+        </div>
+
+        <div id="others" class="group" hidden>
+          <div class="group-head">其他任务</div>
+          <ul id="other-list" class="rows"></ul>
+        </div>
+
+        <div id="today" class="today" hidden>
+          <div class="tile"><strong id="today-count" class="num">0</strong><span>今天完成</span></div>
+          <div class="tile"><strong id="today-time" class="num">0 分钟</strong><span>工作时长</span></div>
+          <div id="third-tile" class="tile"><strong id="third-value" class="num">0</strong><span id="third-label">今日 tokens</span></div>
+        </div>
+
+        <div id="usage" class="card usage" hidden>
+          <div class="usage-head"><span>过去 24 小时</span><span id="usage-sum" class="num"></span></div>
+          <div id="usage-bars" class="usage-bars" aria-hidden="true"></div>
+          <div class="usage-axis"><span>24 小时前</span><span>现在</span></div>
+        </div>
+
+        <div id="recent" class="group" hidden>
+          <div class="group-head">最近任务</div>
+          <ul id="recent-list" class="rows"></ul>
+        </div>
+
+        <p id="hint" class="hint" hidden>位置、大小和提醒方式可在 Harness 的「设置 › 灵动岛」中调整。</p>
+
+        <div class="footer">
+          <button id="stop" class="stop" hidden><span class="stop-glyph" aria-hidden="true"></span><span id="stop-label">停止任务</span></button>
+          <button id="open-harness" class="open-harness">打开 Harness <span aria-hidden="true">↗</span></button>
+          <button id="more" class="icon-button" aria-label="更多" title="显示器、隐藏、退出">···</button>
+          <button id="hide" class="hide" title="可从系统托盘重新显示">隐藏</button>
+        </div>
+        <div id="demo-controls" class="demo-controls" hidden><label>动画预览<select id="demo-state" aria-label="预览状态"></select></label></div>
+      </section>
+
+      <div class="edge-light" aria-hidden="true"></div>
+    </div>
+  </main>
+  </div>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+  <script type="module" src="renderer.js"></script>
+</body></html>

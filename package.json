@@ -1,0 +1,77 @@
+{
+  "name": "dsh-island",
+  "version": "0.4.0",
+  "description": "DeepSeek Harness 桌面灵动岛插件：实时任务状态、任务控制台、在灵动岛回答 Agent 提问（社区插件）",
+  "type": "module",
+  "license": "MIT",
+  "main": "src/host.js",
+  "exports": {
+    ".": "./src/host.js",
+    "./client": "./web/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "desktop",
+    "web",
+    "assets",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "desktop",
+    "dynamic-island",
+    "electron"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": "0.2.1-rc.3",
+    "@deepseek-ai/schemastery": "~3.18.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:host": "node scripts/check-host.mjs",
+    "test:desktop": "node tests/desktop.mjs",
+    "preview": "node scripts/preview.mjs",
+    "pack:plugin": "npm pack --pack-destination artifacts --ignore-scripts"
+  },
+  "author": "a961282799-crypto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/a961282799-crypto/dsh-island.git"
+  },
+  "homepage": "https://github.com/a961282799-crypto/dsh-island#readme",
+  "bugs": {
+    "url": "https://github.com/a961282799-crypto/dsh-island/issues"
+  }
+}

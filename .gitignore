@@ -1,0 +1,6 @@
+node_modules/
+.work/
+.preview/
+.qa/
+artifacts/
+*.log
