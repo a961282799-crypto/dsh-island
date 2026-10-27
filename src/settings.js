@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 // 灵动岛在 Harness「设置 › 灵动岛」中的选项。字段都是 volatile：修改后即时生效，不重启插件。
 export const POSITIONS = ['top-center', 'top-left', 'top-right', 'left-center', 'right-center', 'bottom-center'];
 export const SIZES = { small: 0.85, medium: 1, large: 1.15 };
-export const DEFAULT_PREFS = { enabled: true, position: 'top-center', size: 'medium', reduceMotion: false, popups: true, details: true, balance: true, questions: true };
+export const DEFAULT_PREFS = { enabled: true, position: 'top-center', size: 'medium', reduceMotion: false, popups: true, details: true, balance: true, questions: true, approvals: true, hoverExpand: true };
 
 async function loadSchemastery() {
   try { const m = await import('@deepseek-ai/schemastery'); return m.default ?? m; } catch {}
@@ -29,6 +29,8 @@ export const Config = z ? z.object({
   details: z.boolean().default(true).description('在灵动岛中显示任务标题、计划与工具').volatile(),
   balance: z.boolean().default(true).description('空闲时显示 DeepSeek 账户余额').volatile(),
   questions: z.boolean().default(true).description('在灵动岛中回答 Agent 的提问').volatile(),
+  approvals: z.boolean().default(true).description('在灵动岛中批准或拒绝权限请求').volatile(),
+  hoverExpand: z.boolean().default(true).description('鼠标停留时直接展开面板').volatile(),
   allowStandalone: z.boolean().default(false).hidden(),
   dataDir: z.string().hidden()
 }) : undefined;
@@ -44,6 +46,6 @@ export function readPrefs(config = {}) {
   }
   if (!POSITIONS.includes(prefs.position)) prefs.position = DEFAULT_PREFS.position;
   if (!Object.hasOwn(SIZES, prefs.size)) prefs.size = DEFAULT_PREFS.size;
-  for (const key of ['enabled', 'reduceMotion', 'popups', 'details', 'balance', 'questions']) prefs[key] = prefs[key] !== false && prefs[key] !== 'false' ? Boolean(prefs[key]) : false;
+  for (const key of ['enabled', 'reduceMotion', 'popups', 'details', 'balance', 'questions', 'approvals', 'hoverExpand']) prefs[key] = prefs[key] !== false && prefs[key] !== 'false' ? Boolean(prefs[key]) : false;
   return prefs;
 }

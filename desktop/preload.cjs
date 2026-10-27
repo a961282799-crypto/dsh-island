@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('island',{
   stop:sessionId=>ipcRenderer.send('island:stop',sessionId),
   panel:()=>ipcRenderer.send('island:panel'),
   answer:(callId,answers)=>ipcRenderer.send('island:answer',callId,answers),
+  approve:(id,outcome)=>ipcRenderer.send('island:approve',id,outcome),
+  stats:()=>ipcRenderer.send('island:stats'),
   preview:state=>ipcRenderer.send('island:preview',state)
 });

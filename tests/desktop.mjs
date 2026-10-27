@@ -44,7 +44,12 @@ try{
     await page.screenshot({path:`artifacts/qa/state-${state}.png`,omitBackground:true});
   }
   // Answering a question in the island: pick, next, multi-pick, submit; the preview then resumes thinking.
-  await page.selectOption('#demo-state','waiting');await page.waitForTimeout(900);
+  // A permission request comes first: the buttons unlock after a moment, allowing once hands over to the question.
+  await page.selectOption('#demo-state','waiting');await page.waitForTimeout(300);
+  assert.equal(await page.locator('#approve').isVisible(),true);assert.equal(await page.locator('#ask').isVisible(),false);
+  assert.equal(await page.locator('#approve-allow').isDisabled(),true,'approval buttons are locked briefly against stray clicks');
+  await page.waitForTimeout(700);await page.screenshot({path:'artifacts/qa/approval.png',omitBackground:true});
+  await page.click('#approve-allow');await page.waitForTimeout(500);
   assert.equal(await page.locator('#ask').isVisible(),true);
   await page.click('.ask-opt >> nth=0');await page.click('#ask-next');await page.waitForTimeout(300);
   await page.click('.ask-opt >> nth=1');await page.click('#ask-next');await page.waitForTimeout(1200);
@@ -56,6 +61,14 @@ try{
   await page.click('#stop');assert.equal(await page.getAttribute('#stop','data-armed'),'true');
   await page.click('#stop');await page.waitForTimeout(700);
   assert.equal(await page.locator('#island').getAttribute('data-state'),'paused');
+  // Completed tasks preview the reply; the usage window opens from the panel.
+  await page.selectOption('#demo-state','completed');await page.waitForTimeout(700);
+  assert.equal(await page.locator('#reply').isVisible(),true);
+  const [stats]=await Promise.all([app.waitForEvent('window'),page.click('#stats')]);
+  await stats.waitForFunction(()=>/^\d/.test(document.getElementById('k-turns').textContent));
+  await stats.click('[data-range="7d"]');await stats.waitForFunction(()=>document.getElementById('chart-title').textContent.includes('7'));
+  assert.equal(await stats.locator('.chart .col').count(),7);
+  await stats.screenshot({path:'artifacts/qa/stats.png'});await stats.close();
   await settings({motion:'reduced'});await page.waitForTimeout(250);
   const activeAnimations=await page.evaluate(()=>document.getAnimations().filter(a=>a.playState==='running').length);assert.equal(activeAnimations,0);
   await settings({motion:'full'});await page.waitForTimeout(250);await page.keyboard.press('Escape');await page.waitForTimeout(750);
@@ -80,6 +93,6 @@ try{
     }finally{pointer(points.original,false);await app.evaluate(({BrowserWindow},id)=>BrowserWindow.fromId(id)?.destroy(),points.behind);}
   }
   assert.deepEqual(errors,[]);
-  console.log('PASS native transparent window, always-on-top, four anchors, vertical side layout, three sizes, two-step stop, answering questions, all 11 states, reduced motion, Escape, native click-through and renderer errors');
+  console.log('PASS native transparent window, always-on-top, four anchors, vertical side layout, three sizes, two-step stop, approvals, answering questions, reply preview, usage window, all 11 states, reduced motion, Escape, native click-through and renderer errors');
   await writeFile('artifacts/qa/desktop-result.json',JSON.stringify({passed:true,windowState,states:['idle',...states],errors},null,2));
 }finally{await app.close();}

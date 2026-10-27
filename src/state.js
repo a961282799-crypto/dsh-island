@@ -25,7 +25,7 @@ export class ActivityStore {
     if (!this.sessions.has(id)) this.sessions.set(id, {
       id, state: 'idle', title: '', updated: this.now(), started: 0, ended: 0,
       tools: new Map(), approvals: new Set(), questions: new Set(),
-      todos: [], trail: [], toolCount: 0, model: '', contextTokens: 0, inputTokens: 0, cacheTokens: 0, outputTokens: 0
+      todos: [], trail: [], toolCount: 0, model: '', contextTokens: 0, contextWindow: 0, inputTokens: 0, cacheTokens: 0, outputTokens: 0, lastText: '', reply: ''
     });
     return this.sessions.get(id);
   }
@@ -42,7 +42,7 @@ export class ActivityStore {
       case 'session/title': e.title = clip(d.title); break;
       case 'turn/start':
         e.tools.clear(); e.approvals.clear(); e.questions.clear();
-        e.trail = []; e.toolCount = 0; e.inputTokens = 0; e.cacheTokens = 0; e.outputTokens = 0;
+        e.trail = []; e.toolCount = 0; e.inputTokens = 0; e.cacheTokens = 0; e.outputTokens = 0; e.lastText = ''; e.reply = '';
         this.set(id, 'thinking', { started: this.now(), ended: 0, updated: this.now() }); break;
       case 'step/start': if (!e.approvals.size && !e.questions.size) this.set(id, 'thinking'); break;
       case 'tool/call': {
@@ -73,7 +73,10 @@ export class ActivityStore {
         break;
       case 'model/selection': { const m = typeof d.model === 'string' ? d.model : d.model?.id ?? d.selection?.model; if (typeof m === 'string') e.model = clip(m, 40); break; }
       case 'assistant/attempt': if (typeof d.source?.model === 'string') e.model = clip(d.source.model, 40); break;
+      case 'request/context': if (Number.isFinite(d.contextWindow) && d.contextWindow > 0) e.contextWindow = d.contextWindow; break;
       case 'assistant/message': {
+        const text = Array.isArray(d.message?.content) ? d.message.content.filter(b => b?.type === 'text' && typeof b.text === 'string').map(b => b.text).join(' ') : '';
+        if (text.trim()) e.lastText = clip(text.replace(/[#*`>_~|]+/g, ' ').replace(/\s+/g, ' '), 160);
         const u = d.usage;
         if (u && typeof u === 'object') {
           e.contextTokens = count(u.inputTokens) + count(u.cacheReadTokens) + count(u.cacheWriteTokens);
@@ -96,6 +99,7 @@ export class ActivityStore {
         const state = reason === 'completed' ? 'completed' : reason === 'aborted' ? 'paused' : 'error';
         e.tools.clear(); e.approvals.clear();
         if(state!=='completed')e.questions.clear();
+        if (state === 'completed') e.reply = e.lastText;
         this.set(id, e.questions.size?'waiting':state, { ended: this.now() });
         if (e.started) this.finished = [...this.finished, { id, title: e.title, state, started: e.started, ended: e.ended, toolCount: e.toolCount, inputTokens: e.inputTokens, cacheTokens: e.cacheTokens, outputTokens: e.outputTokens }].slice(-12);
         break;
@@ -131,7 +135,8 @@ export class ActivityStore {
       tool: e ? [...e.tools.values()].at(-1) ?? '' : '',
       detail: e ? {
         plan: todos.length ? { total: todos.length, done: todos.filter(t => t.status === 'completed').length, current: todos.find(t => t.status === 'in_progress')?.content ?? '' } : null,
-        trail: e.trail.slice(-4), toolCount: e.toolCount, model: e.model, contextTokens: e.contextTokens, outputTokens: e.outputTokens,
+        trail: e.trail.slice(-4), toolCount: e.toolCount, model: e.model, contextTokens: e.contextTokens, contextWindow: e.contextWindow, outputTokens: e.outputTokens,
+        reply: e.state === 'completed' ? e.reply : '',
         cacheRate: e.inputTokens + e.cacheTokens > 0 ? Math.round(e.cacheTokens / (e.inputTokens + e.cacheTokens) * 100) : null
       } : null,
       sessions: rows.slice(0, 5).map(r => ({ id: r.id, title: r.title, state: r.state, started: r.started, ended: r.ended })),

@@ -3,8 +3,8 @@ import {STATES} from '../src/state.js';
 const $=id=>document.getElementById(id);
 const island=$('island'),stage=$('stage'),bridge=window.island;
 let current={activity:{state:'idle'},settings:{position:'top-center',scale:1,motion:'full'}};
-let expanded=false,peek=false,burstUntil=0,lastState='',boundsFrame,burstTimer,peekTimer,leaveTimer,armTimer,listKey='',autoOpened=false;
-const drafts=new Map(),seenAsk=new Set();
+let expanded=false,peek=false,burstUntil=0,lastState='',boundsFrame,burstTimer,peekTimer,leaveTimer,armTimer,hoverTimer,listKey='',autoOpened=false,hoverOpened=false,lastReply='';
+const drafts=new Map(),seenAsk=new Set(),seenApproval=new Map(),sentApproval=new Map();
 
 // 出现时短暂"弹出"以示提醒；思考仅在新任务开始时弹出。
 const BURST={thinking:1700,waiting:3600,completed:3000,error:3800,paused:2200,offline:2600};
@@ -41,7 +41,8 @@ function applyShape(){
 function fitPanel(){island.style.height=expanded?`${Math.min(innerHeight-24,$('panel').scrollHeight+76)}px`:'';}
 
 function expand(value){
-  expanded=value;peek=false;clearTimeout(peekTimer);
+  expanded=value;peek=false;clearTimeout(peekTimer);clearTimeout(hoverTimer);
+  if(!value)hoverOpened=false;
   island.dataset.expanded=String(value);
   $('capsule').setAttribute('aria-expanded',String(value));
   $('capsule').setAttribute('aria-label',value?'收起 DeepSeek 灵动岛':'展开 DeepSeek 灵动岛');
@@ -56,18 +57,21 @@ function burst(ms){
   burstTimer=setTimeout(applyShape,ms+20);applyShape();
 }
 
-// 悬停预览：轻停片刻再舒展，离开后收回；展开时离开过久自动收起。
+// 悬停：轻停片刻先舒展；停留更久（可在设置里关闭）直接展开面板，离开后收回。
+const busyHere=()=>!!(askOf()||approvalOf()||document.activeElement?.matches('select,input'));
 island.addEventListener('mouseenter',()=>{
-  clearTimeout(leaveTimer);clearTimeout(peekTimer);
-  if(!expanded)peekTimer=setTimeout(()=>{peek=true;applyShape();},140);
+  clearTimeout(leaveTimer);clearTimeout(peekTimer);clearTimeout(hoverTimer);
+  if(expanded)return;
+  peekTimer=setTimeout(()=>{peek=true;applyShape();},140);
+  if(current.prefs?.hoverExpand!==false)hoverTimer=setTimeout(()=>{if(!expanded){hoverOpened=true;autoOpened=false;expand(true);}},700);
 });
 island.addEventListener('mouseleave',()=>{
-  clearTimeout(peekTimer);
+  clearTimeout(peekTimer);clearTimeout(hoverTimer);
   if(peek){peekTimer=setTimeout(()=>{peek=false;applyShape();},220);}
-  if(expanded)leaveTimer=setTimeout(()=>{if(expanded&&!askOf()&&!document.activeElement?.matches('select,input'))expand(false);},6000);
+  if(expanded)leaveTimer=setTimeout(()=>{if(expanded&&!busyHere())expand(false);},hoverOpened?450:6000);
 });
 
-$('capsule').addEventListener('click',()=>{autoOpened=false;expand(!expanded);});
+$('capsule').addEventListener('click',()=>{autoOpened=false;const pinned=hoverOpened;hoverOpened=false;clearTimeout(hoverTimer);if(pinned&&expanded){applyShape();return;}expand(!expanded);});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&expanded)expand(false);});
 document.addEventListener('contextmenu',e=>{e.preventDefault();bridge.menu();});
 // 停止任务需要点两次：第一次变红确认，3 秒内再点才真正停止。
@@ -78,6 +82,8 @@ $('stop').addEventListener('click',()=>{
 });
 $('more').addEventListener('click',()=>bridge.menu());
 $('open-harness').addEventListener('click',()=>bridge.open());
+$('stats').addEventListener('click',()=>bridge.stats?.());
+$('reply').addEventListener('click',()=>bridge.open());
 $('hide').addEventListener('click',()=>{expand(false);bridge.hide();});
 for(const [key,value] of Object.entries(STATES)){const o=document.createElement('option');o.value=key;o.textContent=value.label;$('demo-state').append(o);}
 $('demo-state').addEventListener('change',()=>bridge.preview($('demo-state').value));
@@ -154,6 +160,42 @@ function advance(){
 $('ask').addEventListener('submit',e=>{e.preventDefault();if(!$('ask-next').disabled)advance();});
 $('ask-skip').addEventListener('click',()=>{const c=currentAsk();if(!c)return;c.ans.selected=[];c.ans.custom='';$('ask-custom').value='';advance();});
 
+// 审批卡：在灵动岛里允许一次或拒绝工具调用；出现后短暂锁定按钮，防止误点。
+function approvalOf(){return current.prefs?.approvals!==false?(current.activity?.approvals||[])[0]:undefined;}
+function renderApprove(){
+  const a=approvalOf();$('approve').hidden=!a;
+  if(!a)return false;
+  if(!seenApproval.has(a.id))seenApproval.set(a.id,Date.now());
+  const details=current.prefs?.details!==false,count=(current.activity.approvals||[]).length;
+  $('approve-title').textContent=`${toolLabel(a.toolName)} 需要你批准`+(details&&a.title?` · ${a.title}`:'');
+  $('approve-count').textContent=count>1?`还有 ${count-1} 个`:'';
+  $('approve-reason').textContent=a.reason||'Agent 想执行一个需要授权的操作。';
+  const detail=details?a.detail:null;
+  $('approve-detail').hidden=!detail;
+  if(detail){$('approve-label').textContent=detail.label;$('approve-text').textContent=detail.text;$('approve-text').classList.toggle('plain',!detail.mono);}
+  const sent=sentApproval.get(a.id),result=current.approvalResults?.[a.id],failed=result&&!result.ok&&result.at>(sent||0);
+  if(failed)sentApproval.delete(a.id);
+  const sending=sentApproval.has(a.id),locked=Date.now()-seenApproval.get(a.id)<600;
+  $('approve-allow').disabled=$('approve-reject').disabled=sending||locked;
+  if(locked)setTimeout(renderApprove,620-(Date.now()-seenApproval.get(a.id)));
+  const st=$('approve-status');st.className='ask-status'+(failed?' err':'');
+  st.textContent=sending?'正在提交…':failed?result.reason:'持久授权请在 Harness 中设置';
+  return true;
+}
+function decide(outcome){const a=approvalOf();if(!a||sentApproval.has(a.id)||$('approve-allow').disabled)return;sentApproval.set(a.id,Date.now());bridge.approve(a.id,outcome);renderApprove();}
+$('approve').addEventListener('submit',e=>{e.preventDefault();decide('allowed-once');});
+$('approve-reject').addEventListener('click',()=>decide('rejected'));
+
+// 上下文占用：鲸鱼外圈按占用比例描边，70% 起变黄，90% 起变红。
+function contextOf(d){if(!d?.contextTokens||!d?.contextWindow)return null;return Math.min(100,Math.round(d.contextTokens/d.contextWindow*100));}
+function renderRing(state,d){
+  const pct=['idle','offline'].includes(state)?null:contextOf(d);
+  if(pct==null){delete island.dataset.ctx;return;}
+  island.dataset.ctx=pct>=90?'full':pct>=70?'warn':'ok';
+  island.style.setProperty('--ctx-pct',String(Math.max(2,pct)));
+  $('capsule').title=`上下文已用 ${pct}%`;
+}
+
 // 展开面板：进行中显示当前任务卡和其他任务，空闲时显示今天的统计和最近完成。
 function renderPanel({activity:a,prefs={},history={},balance,preview}){
   const state=Object.hasOwn(STATES,a.state)?a.state:'offline',details=prefs.details!==false;
@@ -168,7 +210,8 @@ function renderPanel({activity:a,prefs={},history={},balance,preview}){
   const trailKey=trail.join('|');
   if($('trail').dataset.key!==trailKey){$('trail').dataset.key=trailKey;$('trail').replaceChildren(...trail.map((n,i)=>{const c=document.createElement('span');c.className='chip';c.textContent=toolLabel(n);c.style.animationDelay=`${i*40}ms`;return c;}));}
   $('trail').hidden=!trail.length;
-  const meta=[d.model,d.contextTokens?`上下文 ${tokens(d.contextTokens)}`:'',d.cacheRate!=null?`缓存命中 ${d.cacheRate}%`:'',d.toolCount?`工具 ${d.toolCount} 次`:'',d.outputTokens?`输出 ${tokens(d.outputTokens)}`:''].filter(Boolean);
+  const pct=contextOf(d);
+  const meta=[d.model,d.contextTokens?(pct!=null?`上下文 ${tokens(d.contextTokens)} / ${tokens(d.contextWindow)} (${pct}%)`:`上下文 ${tokens(d.contextTokens)}`):'',d.cacheRate!=null?`缓存命中 ${d.cacheRate}%`:'',d.toolCount?`工具 ${d.toolCount} 次`:'',d.outputTokens?`输出 ${tokens(d.outputTokens)}`:''].filter(Boolean);
   $('meta').replaceChildren(...meta.map(t=>{const s=document.createElement('span');s.textContent=t;return s;}));
   $('activity-note').textContent=preview?'预览模式 · 示例数据，不代表实际任务':'';
 
@@ -196,14 +239,21 @@ function renderPanel({activity:a,prefs={},history={},balance,preview}){
   const day=history.day;
   $('usage').hidden=!idle||!day||!day.tokens;
   if(day&&day.tokens){
-    $('usage-sum').textContent=`${tokens(day.tokens)} tokens${day.cacheRate!=null?` · 缓存命中 ${day.cacheRate}%`:''}`;
+    const cost=history.today?.cost;
+    $('usage-sum').textContent=`${tokens(day.tokens)} tokens${day.cacheRate!=null?` · 缓存命中 ${day.cacheRate}%`:''}${cost>=0.005?` · 今日≈¥${cost.toFixed(2)}`:''}`;
     const max=Math.max(...day.hours,1),key=day.hours.join(',');
     if($('usage-bars').dataset.key!==key){$('usage-bars').dataset.key=key;$('usage-bars').replaceChildren(...day.hours.map((v,i)=>{const b=document.createElement('i');if(!v)b.className='zero';b.style.height=v?`${Math.max(8,Math.round(v/max*100))}%`:'';b.style.animationDelay=`${i*18}ms`;b.title=`${tokens(v)} tokens`;return b;}));}
   }
   $('recent').hidden=!(idle||['completed','paused','error'].includes(state))||!recent.length;
   $('hint').hidden=!idle||preview;
   $('stop').hidden=!a.stoppable;if(!a.stoppable)disarm();
-  if(renderAsk())for(const id of ['task','others','today','usage','recent','hint'])$(id).hidden=true;
+  const reply=details&&state==='completed'?d.reply:'';
+  $('reply').hidden=!reply;$('reply-text').textContent=reply||'';
+  if(reply)$('recent').hidden=true;
+  const approving=renderApprove();
+  if(approving)$('ask').hidden=true;
+  const asking=!approving&&renderAsk();
+  if(approving||asking)for(const id of ['task','others','today','usage','recent','hint','reply'])$(id).hidden=true;
 }
 
 // 状态切换：文字与指示器做模糊交叉淡入，异常时整体轻摇。
@@ -225,22 +275,34 @@ function render(snapshot){
 
   $('status-label').textContent=copy.label;
   const details=snapshot.prefs?.details!==false;
-  const ask=askOf();
+  const ask=askOf(),approval=approvalOf(),reply=details&&state==='completed'?a.detail?.reply:'';
   if(ask&&state==='waiting')$('status-label').textContent='有问题等你回答';
-  $('mini-note').textContent=ask&&state==='waiting'&&!expanded?ask.questions[0].question:state==='idle'?(preview?'动画预览':'DeepSeek Harness'):details&&a.title?a.title:copy.detail;
+  if(approval)$('status-label').textContent='需要你批准';
+  else if(reply)$('status-label').textContent='有新回复';
+  $('mini-note').textContent=approval&&!expanded?(details&&approval.detail?.text?approval.detail.text:toolLabel(approval.toolName))
+    :ask&&state==='waiting'&&!expanded?ask.questions[0].question
+    :reply&&!expanded?reply
+    :state==='idle'?(preview?'动画预览':'DeepSeek Harness'):details&&a.title?a.title:copy.detail;
+  island.dataset.alert=approval?'approval':reply?'reply':'';
+  renderRing(state,a.detail);
   $('badge').hidden=!(a.activeCount>1);$('badge').textContent=a.activeCount>1?String(a.activeCount):'';
   $('demo-controls').hidden=!preview;$('demo-state').value=state;
   renderPanel(snapshot);
 
   for(const id of drafts.keys())if(!(a.questions||[]).some(q=>q.callId===id))drafts.delete(id);
-  if(ask&&!seenAsk.has(ask.callId)){seenAsk.add(ask.callId);if(snapshot.prefs?.popups!==false&&!expanded){autoOpened=true;expand(true);}}
-  if(!ask&&autoOpened){autoOpened=false;if(expanded)expand(false);}
+  for(const id of [...seenApproval.keys()])if(!(a.approvals||[]).some(x=>x.id===id)){seenApproval.delete(id);sentApproval.delete(id);}
+  const prompt=approval?'approval:'+approval.id:ask?'ask:'+ask.callId:'';
+  if(prompt&&!seenAsk.has(prompt)){seenAsk.add(prompt);if(snapshot.prefs?.popups!==false&&!expanded){autoOpened=true;expand(true);}}
+  if(!prompt&&autoOpened){autoOpened=false;if(expanded)expand(false);}
+  // 新回复：完成时在胶囊里预览回复开头，并多停留一会儿。
+  if(reply&&reply!==lastReply&&lastState===state&&!expanded&&snapshot.prefs?.popups!==false)burst(4200);
+  lastReply=reply||'';
   if(lastState!==state){
     const prev=lastState;lastState=state;
     $('announcement').textContent=copy.label;
     choreograph(state,prev);
     const fresh=state!=='thinking'||QUIET.includes(prev);
-    if(BURST[state]&&fresh&&prev&&!expanded&&snapshot.prefs?.popups!==false)burst(BURST[state]);
+    if(BURST[state]&&fresh&&prev&&!expanded&&snapshot.prefs?.popups!==false)burst(reply?4200:BURST[state]);
   }
   // 切到减少动效时，正在进行的过渡直接落到终点。
   if(!motionOn())document.getAnimations().forEach(x=>{if(x instanceof CSSAnimation)return;try{x.finish();}catch{x.cancel();}});
@@ -250,4 +312,4 @@ function render(snapshot){
 const unsubscribe=bridge.subscribe(render);
 render(await bridge.initial());
 const timer=setInterval(tick,1000);
-window.addEventListener('beforeunload',()=>{unsubscribe();clearInterval(timer);cancelAnimationFrame(boundsFrame);clearTimeout(burstTimer);clearTimeout(peekTimer);clearTimeout(leaveTimer);clearTimeout(armTimer);});
+window.addEventListener('beforeunload',()=>{unsubscribe();clearInterval(timer);cancelAnimationFrame(boundsFrame);clearTimeout(burstTimer);clearTimeout(peekTimer);clearTimeout(leaveTimer);clearTimeout(armTimer);clearTimeout(hoverTimer);});

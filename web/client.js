@@ -73,6 +73,10 @@ window.__ModuleLoader__.load({
 			questionsHint: "Agent 提问时灵动岛自动展开，可以直接选择或输入回答；Harness 窗口里也照常可答，先答的生效。计划审阅等需要看全文的问题仍在 Harness 中回答。",
 			balance: "显示账户余额",
 			balanceHint: "空闲时在灵动岛里显示 DeepSeek 账户余额（需在 设置 › 账户 中登录 DeepSeek 账号）。",
+			approvals: "在灵动岛批准权限请求",
+			approvalsHint: "Agent 需要授权时（如执行命令、修改文件），灵动岛显示要做什么，可直接“允许一次”或“拒绝”；Harness 窗口里也照常可批，先批的生效。始终允许等持久授权仍在 Harness 中设置。",
+			hoverExpand: "悬停展开面板",
+			hoverExpandHint: "鼠标在灵动岛上停留片刻即展开面板，移开后自动收起；关闭后需要点击展开。",
 			reduceMotion: "减少动态效果",
 			reduceMotionHint: "关闭灵动岛的循环动画和弹性过渡。",
 			small: "小巧", medium: "适中", large: "舒展",
@@ -101,6 +105,10 @@ window.__ModuleLoader__.load({
 			questionsHint: "When the agent asks, the island opens so you can pick or type an answer; Harness can still answer too, and whichever is first counts. Plan reviews stay in Harness.",
 			balance: "Show account balance",
 			balanceHint: "Show your DeepSeek account balance when idle (requires signing in under Settings › Account).",
+			approvals: "Approve permission requests in the island",
+			approvalsHint: "When the agent needs permission (running a command, editing a file), the island shows what it wants to do so you can allow once or reject; Harness can still answer too, and whichever is first counts. Persistent grants stay in Harness.",
+			hoverExpand: "Expand on hover",
+			hoverExpandHint: "Resting the pointer on the island opens the panel and moving away closes it; when off, click to expand.",
 			reduceMotion: "Reduce motion",
 			reduceMotionHint: "Turn off looping animations and springy transitions.",
 			small: "Small", medium: "Medium", large: "Large",
@@ -114,7 +122,7 @@ window.__ModuleLoader__.load({
 
 		const ENTRY = "dsh-island";
 		const NS = "settings.dshIsland";
-		const DEFAULTS = { enabled: true, position: "top-center", size: "medium", reduceMotion: false, popups: true, details: true, balance: true, questions: true };
+		const DEFAULTS = { enabled: true, position: "top-center", size: "medium", reduceMotion: false, popups: true, details: true, balance: true, questions: true, approvals: true, hoverExpand: true };
 		const SPOTS = [
 			["top-left", { left: 6, top: 6 }], ["top-center", { left: 90, top: 6 }], ["top-right", { right: 6, top: 6 }],
 			["left-center", { left: 6, top: 45 }, true], ["right-center", { right: 6, top: 45 }, true], ["bottom-center", { left: 90, bottom: 16 }]
@@ -166,6 +174,8 @@ window.__ModuleLoader__.load({
 					jsx(Row, { label: t("popups"), hint: t("popupsHint"), children: jsx(Switch, { checked: value("popups"), label: t("popups"), disabled, onChange: (v) => set("popups", v) }) }),
 					jsx(Row, { label: t("details"), hint: t("detailsHint"), children: jsx(Switch, { checked: value("details"), label: t("details"), disabled, onChange: (v) => set("details", v) }) }),
 					jsx(Row, { label: t("questions"), hint: t("questionsHint"), children: jsx(Switch, { checked: value("questions"), label: t("questions"), disabled, onChange: (v) => set("questions", v) }) }),
+					jsx(Row, { label: t("approvals"), hint: t("approvalsHint"), children: jsx(Switch, { checked: value("approvals"), label: t("approvals"), disabled, onChange: (v) => set("approvals", v) }) }),
+					jsx(Row, { label: t("hoverExpand"), hint: t("hoverExpandHint"), children: jsx(Switch, { checked: value("hoverExpand"), label: t("hoverExpand"), disabled, onChange: (v) => set("hoverExpand", v) }) }),
 					jsx(Row, { label: t("balance"), hint: t("balanceHint"), children: jsx(Switch, { checked: value("balance"), label: t("balance"), disabled, onChange: (v) => set("balance", v) }) }),
 					jsx(Row, { label: t("reduceMotion"), hint: t("reduceMotionHint"), children: jsx(Switch, { checked: value("reduceMotion"), label: t("reduceMotion"), disabled, onChange: (v) => set("reduceMotion", v) }) })
 				] })

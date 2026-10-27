@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>用量统计 · DeepSeek 灵动岛</title><link rel="stylesheet" href="stats.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <div><h1>用量统计</h1><p id="source" class="sub">正在读取 Harness 会话记录…</p></div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="时间范围">
+      <button role="tab" data-range="today" aria-selected="true">今天</button>
+      <button role="tab" data-range="7d" aria-selected="false">7 天</button>
+      <button role="tab" data-range="30d" aria-selected="false">30 天</button>
+    </div>
+  </header>
+
+  <main id="main" aria-busy="true">
+    <section class="kpis" aria-label="概览">
+      <div class="kpi"><span class="k">Tokens</span><strong id="k-tokens" class="num">—</strong><span id="k-tokens-sub" class="s"></span></div>
+      <div class="kpi"><span class="k">估算费用</span><strong id="k-cost" class="num">—</strong><span id="k-cost-sub" class="s"></span></div>
+      <div class="kpi"><span class="k">缓存命中</span><strong id="k-cache" class="num">—</strong><span class="s">命中部分按缓存价计费</span></div>
+      <div class="kpi"><span class="k">轮次</span><strong id="k-turns" class="num">—</strong><span id="k-turns-sub" class="s"></span></div>
+      <div class="kpi"><span class="k">工作时长</span><strong id="k-time" class="num">—</strong><span class="s">各轮耗时之和</span></div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="card-head">
+        <h2 id="chart-title">按小时</h2>
+        <div class="legend" aria-label="图例">
+          <span><i style="--c:var(--s-cache)"></i>缓存命中</span>
+          <span><i style="--c:var(--s-input)"></i>未命中输入</span>
+          <span><i style="--c:var(--s-output)"></i>输出</span>
+        </div>
+      </div>
+      <div id="chart" class="chart"></div>
+      <div id="tip" class="tip" role="status" hidden></div>
+    </section>
+
+    <div class="cols">
+      <section class="card">
+        <div class="card-head"><h2>按模型</h2></div>
+        <table class="models"><thead><tr><th>模型</th><th class="r">Tokens</th><th class="r">≈ 费用</th><th class="r">轮次</th></tr></thead><tbody id="models"></tbody></table>
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>按会话</h2><span class="hint">点开查看每一轮</span></div>
+        <div id="sessions" class="sessions"></div>
+      </section>
+    </div>
+
+    <p id="empty" class="empty" hidden>这段时间还没有完成的轮次。</p>
+    <footer class="note">
+      费用为估算：按 <a id="price-link" href="https://api-docs.deepseek.com/zh-cn/quick_start/pricing" target="_blank" rel="noreferrer">DeepSeek 官方价格</a>（2026-10-27 查询，人民币）和每次调用的时间计算，
+      高峰时段（北京时间工作日 9–12 点、14–18 点）按高峰价；法定节假日无法识别，按工作日计。未命中缓存的输入（含写入缓存）按未命中价，输出含思考内容。
+      没有官方价格的模型不计入费用。实际扣费以 DeepSeek 账单为准。
+    </footer>
+  </main>
+  <script src="stats.js"></script>
+</body></html>

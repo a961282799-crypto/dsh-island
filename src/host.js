@@ -7,6 +7,8 @@ import { ActivityStore } from './state.js';
 import { runtimePath } from './runtime.js';
 import { Config, readPrefs } from './settings.js';
 import { QuestionDesk } from './questions.js';
+import { ApprovalDesk } from './approvals.js';
+import { UsageLedger } from './usage.js';
 
 export { Config };
 export const name = 'dsh-island';
@@ -41,13 +43,31 @@ export function stopSession(ctx, sessionId) {
   return true;
 }
 
+/** Context pressure from Harness's own token-meter projection, when the session is live. */
+function contextFromProjection(ctx, sessionId) {
+  try {
+    const session = ctx.agents.get?.(sessionId)?.session;
+    const view = session && ctx.get?.('sessionProjections')?.stateOf?.(session, 'contextPressure');
+    return view && typeof view === 'object' ? view : null;
+  } catch { return null; }
+}
+
 /** Snapshot sent to the island: top-level tasks only, plus sub-agents that need the user. */
-export function islandSnapshot(ctx, store, known, desk) {
+export function islandSnapshot(ctx, store, known, desk, extra = {}) {
   const roots = rootsOf(ctx);
   for (const agent of roots) if (agent?.session?.id) known.add(agent.session.id);
   const data = store.snapshot(id => known.size === 0 || known.has(id));
-  data.questions = desk ? desk.list(roots).map(q => ({ ...q, title: store.sessions.get(q.sessionId)?.title ?? '' })) : [];
+  const title = id => store.sessions.get(id)?.title ?? '';
+  data.questions = desk ? desk.list(roots).map(q => ({ ...q, title: title(q.sessionId) })) : [];
+  data.approvals = extra.approvals ? extra.approvals.list().map(a => ({ ...a, title: title(a.sessionId) })) : [];
   data.stoppable = Boolean(data.sessionId && !['completed','paused','error','idle'].includes(data.state) && roots.some(a => a?.session?.id === data.sessionId));
+  if (data.detail) {
+    const view = contextFromProjection(ctx, data.sessionId);
+    if (view?.contextWindow) data.detail.contextWindow = view.contextWindow;
+    if (Number.isFinite(view?.projectedTokens) || Number.isFinite(view?.pressureTokens)) data.detail.contextTokens = view.projectedTokens ?? view.pressureTokens;
+    if (extra.prefs && extra.prefs.details === false) data.detail.reply = '';
+  }
+  if (extra.usage) data.usage = extra.usage;
   return data;
 }
 
@@ -81,14 +101,31 @@ export function apply(ctx, config = {}) {
   ctx.effect(() => {
     let child, last = '', stopped = false, pending, prefs = readPrefs(config);
     const store = new ActivityStore(), known = new Set();
+    const env={...process.env}; delete env.ELECTRON_RUN_AS_NODE;
+    const dataDir = read('dataDir') || join(env.DSH_HOME || join(homedir(),'.dsh'),'dsh-island');
     const desk = new QuestionDesk(ctx, () => publish());
     desk.enabled = prefs.questions;
     const offDesk = desk.attach();
+    const approvals = new ApprovalDesk(ctx, () => publish());
+    approvals.enabled = prefs.approvals;
+    const offApprovals = approvals.attach();
+    // 用量账本：实时事件 + 历史会话补算（通过 Harness 的 sessionQuery，读一次即缓存）。
+    const ledger = new UsageLedger({ file: join(dataDir, 'usage.json') }).load();
+    const offLedger = ctx.on('session/event', (session, event) => ledger.ingest(session?.id, event), { global: true });
+    let usage, usageAt = 0, usageVersion = -1;
+    const usageNow = () => {
+      if (ledger.version !== usageVersion || Date.now() - usageAt > 60000) { usage = ledger.panel(); usageAt = Date.now(); usageVersion = ledger.version; }
+      return usage;
+    };
+    const backfillAbort = new AbortController();
+    const backfill = () => { const query = ctx.get?.('sessionQuery'); ledger.backfill(query, { signal: backfillAbort.signal }).then(n => { if (n) publish(); }, () => {}); };
+    const backfillFirst = setTimeout(backfill, 8000); backfillFirst.unref?.();
+    const backfillTimer = setInterval(backfill, 30 * 60000); backfillTimer.unref?.();
     const message = value => { if (!stopped && child?.connected) child.send(value, () => {}); };
     const send = () => {
       pending = undefined;
       if (stopped || !child?.connected) return;
-      const data=islandSnapshot(ctx,store,known,desk), encoded=JSON.stringify(data);
+      const data=islandSnapshot(ctx,store,known,desk,{approvals,prefs,usage:usageNow()}), encoded=JSON.stringify(data);
       if(encoded===last)return;
       last=encoded;
       child.send({type:'activity',data}, error=>{ if(error) last=''; });
@@ -109,12 +146,10 @@ export function apply(ctx, config = {}) {
       const next = readPrefs(config);
       if (next.enabled && !prefs.enabled) message({ type: 'show' });
       const balanceChanged = next.balance !== prefs.balance;
-      prefs = next; desk.enabled = prefs.questions; message({ type: 'prefs', data: prefs }); publish();
+      prefs = next; desk.enabled = prefs.questions; approvals.enabled = prefs.approvals; message({ type: 'prefs', data: prefs }); publish();
       if (balanceChanged) refreshBalance(true);
     });
     try {
-      const env={...process.env}; delete env.ELECTRON_RUN_AS_NODE;
-      const dataDir = read('dataDir') || join(env.DSH_HOME || join(homedir(),'.dsh'),'dsh-island');
       child=spawn(runtimePath(env),[fileURLToPath(new URL('../desktop/main.cjs',import.meta.url)),`--island-data=${dataDir}`],{
         env, windowsHide:true, stdio:['ignore','ignore','pipe','ipc']
       });
@@ -125,11 +160,13 @@ export function apply(ctx, config = {}) {
         if(msg?.type==='panel-open') refreshBalance();
         if(msg?.type==='answer' && typeof msg.callId==='string'){ const result = desk.answer(msg.callId, msg.answers, rootsOf(ctx)); message({ type: 'answer-result', callId: msg.callId, ...result }); publish(); }
         if(msg?.type==='stop' && stopSession(ctx, msg.sessionId)) publish();
+        if(msg?.type==='approve' && typeof msg.id==='string'){ const result = approvals.decide(msg.id, msg.outcome); message({ type: 'approval-result', id: msg.id, ...result }); publish(); }
+        if(msg?.type==='stats'){ message({ type: 'stats', data: ledger.stats(['today','7d','30d'].includes(msg.range) ? msg.range : '7d') }); if (!ledger.sessions.size) backfill(); }
       });
       child.on('exit',code=>{ if(!stopped && code)ctx.logger.warn(`灵动岛窗口已退出 (${code})，重新启用插件可恢复。`); });
     } catch(error) { ctx.logger.warn(error.message); }
     const timer=setInterval(publish,1000); timer.unref();
     const balanceTimer=setInterval(() => refreshBalance(true), 10 * 60000); balanceTimer.unref();
-    return () => { stopped=true; detach(); offDesk?.(); offSettings?.(); clearInterval(timer); clearInterval(balanceTimer); clearTimeout(pending); if(child?.connected)child.send({type:'shutdown'}); setTimeout(()=>{if(child?.exitCode===null)child.kill();},1500).unref(); };
+    return () => { stopped=true; detach(); offDesk?.(); offApprovals?.(); offLedger?.(); backfillAbort.abort(); clearTimeout(backfillFirst); clearInterval(backfillTimer); ledger.save(); offSettings?.(); clearInterval(timer); clearInterval(balanceTimer); clearTimeout(pending); if(child?.connected)child.send({type:'shutdown'}); setTimeout(()=>{if(child?.exitCode===null)child.kill();},1500).unref(); };
   });
 }
