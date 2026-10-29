@@ -55,6 +55,16 @@ try{
   await page.click('.ask-opt >> nth=1');await page.click('#ask-next');await page.waitForTimeout(1200);
   assert.equal(await page.locator('#island').getAttribute('data-state'),'thinking');
   await page.screenshot({path:'artifacts/qa/ask-answered.png',omitBackground:true});
+  // Messaging the agent from the island: while a task runs the message can steer it; the preview then thinks again.
+  await page.selectOption('#demo-state','tools');await page.waitForTimeout(700);
+  assert.equal(await page.locator('#chat').isVisible(),true);assert.equal(await page.locator('#chat-steer').isVisible(),true);
+  await page.fill('#chat-input','先别动 auth/index.ts');await page.click('#chat-steer');await page.waitForTimeout(300);
+  assert.match(await page.textContent('#chat-status'),/已插话/);assert.equal(await page.inputValue('#chat-input'),'');
+  await page.selectOption('#demo-state','completed');await page.waitForTimeout(700);
+  assert.equal(await page.locator('#chat-reply').isVisible(),true);assert.equal(await page.locator('#chat-steer').isVisible(),false);
+  await page.fill('#chat-input','好的，注册流程也一起拆');await page.press('#chat-input','Enter');await page.waitForTimeout(1200);
+  assert.equal(await page.locator('#island').getAttribute('data-state'),'thinking');
+  await page.screenshot({path:'artifacts/qa/chat.png',omitBackground:true});
   // Stop needs two clicks; the preview answers by pausing its sample task.
   await page.selectOption('#demo-state','tools');await page.waitForTimeout(700);
   assert.equal(await page.locator('#stop').isVisible(),true);
@@ -63,7 +73,7 @@ try{
   assert.equal(await page.locator('#island').getAttribute('data-state'),'paused');
   // Completed tasks preview the reply; the usage window opens from the panel.
   await page.selectOption('#demo-state','completed');await page.waitForTimeout(700);
-  assert.equal(await page.locator('#reply').isVisible(),true);
+  assert.equal(await page.locator('#chat-reply').isVisible(),true,'the reply shows in the conversation card');
   const [stats]=await Promise.all([app.waitForEvent('window'),page.click('#stats')]);
   await stats.waitForFunction(()=>/^\d/.test(document.getElementById('k-turns').textContent));
   await stats.click('[data-range="7d"]');await stats.waitForFunction(()=>document.getElementById('chart-title').textContent.includes('7'));
@@ -74,6 +84,11 @@ try{
   await settings({motion:'full'});await page.waitForTimeout(250);await page.keyboard.press('Escape');await page.waitForTimeout(750);
   assert.equal(await page.locator('#capsule').getAttribute('aria-expanded'),'false');
   assert.equal(await page.$eval('#panel',e=>e.inert),true);
+  // Clicking anywhere outside the island takes focus away from its window, which folds the panel.
+  await page.locator('#capsule').click();await page.waitForTimeout(800);
+  assert.equal(await page.locator('#capsule').getAttribute('aria-expanded'),'true');
+  await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.blur();w.emit('blur');});await page.waitForTimeout(750);
+  assert.equal(await page.locator('#capsule').getAttribute('aria-expanded'),'false','an outside click folds the panel');
   if(process.platform==='win32'){
     const points=await app.evaluate(async({BrowserWindow,screen})=>{
       const w=BrowserWindow.getAllWindows()[0],bounds=w.getBounds();

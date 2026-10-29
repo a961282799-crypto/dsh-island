@@ -9,6 +9,7 @@ import { Config, readPrefs } from './settings.js';
 import { QuestionDesk } from './questions.js';
 import { ApprovalDesk } from './approvals.js';
 import { UsageLedger } from './usage.js';
+import { ChatDesk } from './chat.js';
 
 export { Config };
 export const name = 'dsh-island';
@@ -68,6 +69,9 @@ export function islandSnapshot(ctx, store, known, desk, extra = {}) {
     if (extra.prefs && extra.prefs.details === false) data.detail.reply = '';
   }
   if (extra.usage) data.usage = extra.usage;
+  // 继续对话的目标：当前显示的任务，或最近一个顶层任务（不会是子智能体）。
+  const chat = extra.chat?.target(store, known, data.sessionId);
+  data.chat = chat ? (extra.prefs?.details === false ? { ...chat, title: '', reply: '' } : chat) : null;
   return data;
 }
 
@@ -109,6 +113,8 @@ export function apply(ctx, config = {}) {
     const approvals = new ApprovalDesk(ctx, () => publish());
     approvals.enabled = prefs.approvals;
     const offApprovals = approvals.attach();
+    const chat = new ChatDesk(ctx);
+    chat.enabled = prefs.chat;
     // 用量账本：实时事件 + 历史会话补算（通过 Harness 的 sessionQuery，读一次即缓存）。
     const ledger = new UsageLedger({ file: join(dataDir, 'usage.json') }).load();
     const offLedger = ctx.on('session/event', (session, event) => ledger.ingest(session?.id, event), { global: true });
@@ -125,7 +131,7 @@ export function apply(ctx, config = {}) {
     const send = () => {
       pending = undefined;
       if (stopped || !child?.connected) return;
-      const data=islandSnapshot(ctx,store,known,desk,{approvals,prefs,usage:usageNow()}), encoded=JSON.stringify(data);
+      const data=islandSnapshot(ctx,store,known,desk,{approvals,chat,prefs,usage:usageNow()}), encoded=JSON.stringify(data);
       if(encoded===last)return;
       last=encoded;
       child.send({type:'activity',data}, error=>{ if(error) last=''; });
@@ -146,7 +152,7 @@ export function apply(ctx, config = {}) {
       const next = readPrefs(config);
       if (next.enabled && !prefs.enabled) message({ type: 'show' });
       const balanceChanged = next.balance !== prefs.balance;
-      prefs = next; desk.enabled = prefs.questions; approvals.enabled = prefs.approvals; message({ type: 'prefs', data: prefs }); publish();
+      prefs = next; desk.enabled = prefs.questions; approvals.enabled = prefs.approvals; chat.enabled = prefs.chat; message({ type: 'prefs', data: prefs }); publish();
       if (balanceChanged) refreshBalance(true);
     });
     try {
@@ -161,6 +167,7 @@ export function apply(ctx, config = {}) {
         if(msg?.type==='answer' && typeof msg.callId==='string'){ const result = desk.answer(msg.callId, msg.answers, rootsOf(ctx)); message({ type: 'answer-result', callId: msg.callId, ...result }); publish(); }
         if(msg?.type==='stop' && stopSession(ctx, msg.sessionId)) publish();
         if(msg?.type==='approve' && typeof msg.id==='string'){ const result = approvals.decide(msg.id, msg.outcome); message({ type: 'approval-result', id: msg.id, ...result }); publish(); }
+        if(msg?.type==='chat' && typeof msg.id==='string'){ chat.send(msg.sessionId, msg.text, msg.mode).then(result => { message({ type: 'chat-result', id: msg.id, ...result }); publish(); }); }
         if(msg?.type==='stats'){ message({ type: 'stats', data: ledger.stats(['today','7d','30d'].includes(msg.range) ? msg.range : '7d') }); if (!ledger.sessions.size) backfill(); }
       });
       child.on('exit',code=>{ if(!stopped && code)ctx.logger.warn(`灵动岛窗口已退出 (${code})，重新启用插件可恢复。`); });

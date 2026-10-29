@@ -11,7 +11,7 @@ const single = app.requestSingleInstanceLock();
 if(!single) app.quit();
 else start().catch(error=>{ console.error(error); app.exit(1); });
 
-const WIDTH = 440, HEIGHT = 460;
+const WIDTH = 440, HEIGHT = 540;
 const SIZES = { small: 0.85, medium: 1, large: 1.15 };
 const DAY = 24 * 3600 * 1000;
 
@@ -27,12 +27,12 @@ async function start() {
   };
   // 本地只保存“是否隐藏”和显示器；位置、大小、动效来自 Harness 设置（预览模式下才在本地保存）。
   let settings=normalizeSettings(read('settings.json',{}));
-  let prefs={enabled:true,popups:true,details:true,balance:true,questions:true,approvals:true,hoverExpand:true};
+  let prefs={enabled:true,popups:true,details:true,balance:true,questions:true,approvals:true,chat:true,hoverExpand:true};
   let balance=null;
-  let answerResults={},approvalResults={};
+  let answerResults={},approvalResults={},chatResults={};
   let statsWin=null,statsRange='today';
   let history=Array.isArray(read('history.json',[]))?read('history.json',[]):[];
-  let win, tray, ignore=true, hitbox=null, quitting=false, activity={state:'idle',activeCount:0}, demoTimer;
+  let win, tray, ignore=true, hitbox=null, quitting=false, menuOpen=false, activity={state:'idle',activeCount:0}, demoTimer;
   const save=()=>write('settings.json',settings);
   const visible=()=>settings.enabled&&prefs.enabled;
 
@@ -64,7 +64,7 @@ async function start() {
     };
   };
   // Harness 侧的用量账本（含历史会话补算）优先；没有时退回本地的完成记录。
-  const payload=()=>({activity,settings,prefs,answerResults,approvalResults,balance:prefs.balance?balance:null,preview:demo,history:activity.usage??summary(),displays:screen.getAllDisplays().map((d,i)=>({id:d.id,label:d.label||`显示器 ${i+1}`}))});
+  const payload=()=>({activity,settings,prefs,answerResults,approvalResults,chatResults,balance:prefs.balance?balance:null,preview:demo,history:activity.usage??summary(),displays:screen.getAllDisplays().map((d,i)=>({id:d.id,label:d.label||`显示器 ${i+1}`}))});
   const send=()=>{ if(win && !win.isDestroyed())win.webContents.send('island:snapshot',payload()); };
   const position=()=>{
     const display=screen.getAllDisplays().find(d=>d.id===settings.displayId)||screen.getPrimaryDisplay();
@@ -78,7 +78,7 @@ async function start() {
   const update=value=>{settings=normalizeSettings({...settings,...value});save();sync();};
   const applyPrefs=value=>{
     if(!value||typeof value!=='object')return;
-    prefs={enabled:value.enabled!==false,popups:value.popups!==false,details:value.details!==false,balance:value.balance!==false,questions:value.questions!==false,approvals:value.approvals!==false,hoverExpand:value.hoverExpand!==false};
+    prefs={enabled:value.enabled!==false,popups:value.popups!==false,details:value.details!==false,balance:value.balance!==false,questions:value.questions!==false,approvals:value.approvals!==false,chat:value.chat!==false,hoverExpand:value.hoverExpand!==false};
     settings=normalizeSettings({...settings,position:value.position,scale:SIZES[value.size]??1,motion:value.reduceMotion?'reduced':'full'});
     save();sync();
   };
@@ -128,7 +128,13 @@ async function start() {
     if(!trusted(event)||!rect||!['x','y','width','height'].every(k=>Number.isFinite(rect[k])))return;
     hitbox={x:Math.max(0,rect.x),y:Math.max(0,rect.y),width:Math.min(WIDTH,Math.max(0,rect.width)),height:Math.min(HEIGHT,Math.max(0,rect.height)),radius:Number.isFinite(rect.radius)?Math.max(0,rect.radius):0};
   });
-  ipcMain.on('island:menu',event=>{if(trusted(event))menu().popup({window:win});});
+  // 点击灵动岛以外的地方：窗口失去焦点，通知页面收起面板。弹出菜单期间不算，菜单关闭后再判断。
+  const dismiss=()=>{if(win&&!win.isDestroyed())win.webContents.send('island:blur');};
+  const blurred=()=>{if(!menuOpen)dismiss();};
+  const popupMenu=()=>{menuOpen=true;menu().popup({window:win,callback:()=>{menuOpen=false;setTimeout(()=>{if(!win.isDestroyed()&&!win.isFocused())dismiss();},60);}});};
+  ipcMain.on('island:menu',event=>{if(trusted(event))popupMenu();});
+  // 用户在灵动岛上按下鼠标时确保窗口拿到焦点，之后点别处才会触发失焦；悬停和自动弹出不抢焦点。
+  ipcMain.on('island:engage',event=>{if(trusted(event)&&win.isVisible()&&!win.isFocused())win.focus();});
   ipcMain.on('island:open',event=>{if(trusted(event))openHarness();});
   ipcMain.on('island:hide',event=>{if(trusted(event))hide();});
   ipcMain.on('island:answer',(event,callId,answers)=>{
@@ -137,6 +143,14 @@ async function start() {
     const clean=answers.map(a=>({id:String(a?.id??''),selected:Array.isArray(a?.selected)?a.selected.filter(x=>typeof x==='string').slice(0,8):[],...(typeof a?.custom==='string'&&a.custom.trim()?{custom:a.custom.slice(0,4000)}:{})}));
     if(demo){answerResults={[callId]:{ok:true,at:Date.now()}};send();setTimeout(()=>setDemoState('thinking'),700);return;}
     if(process.send)process.send({type:'answer',callId,answers:clean});
+  });
+  // 在灵动岛里发消息：只发给 Harness 告诉我们的那个对话，内容交给 Harness 的会话控制器处理。
+  ipcMain.on('island:chat',(event,id,sessionId,text,mode)=>{
+    if(!trusted(event)||typeof id!=='string'||id.length>80||typeof sessionId!=='string'||typeof text!=='string'||!text.trim()||text.length>8000)return;
+    if(!prefs.chat||activity.chat?.sessionId!==sessionId)return;
+    const how=mode==='steer'?'steer':'queue';
+    if(demo){chatResults={[id]:{ok:true,mode:how,at:Date.now()}};send();setTimeout(()=>setDemoState('thinking'),600);return;}
+    if(process.send)process.send({type:'chat',id,sessionId,text,mode:how});
   });
   ipcMain.on('island:panel',event=>{if(trusted(event)&&process.send)process.send({type:'panel-open'});});
   ipcMain.on('island:stats',event=>{if(trusted(event))openStats();});
@@ -168,6 +182,7 @@ async function start() {
         {id:'framework',header:'测试框架',question:'登录模块的单元测试用哪个框架？',multiSelect:false,options:[{label:'Vitest',description:'和现有构建工具一致，速度快'},{label:'Jest',description:'生态成熟，迁移成本略高'},{label:'node:test',description:'零依赖'}]},
         {id:'cases',header:'覆盖场景',question:'需要覆盖哪些失败场景？',multiSelect:true,options:[{label:'密码错误'},{label:'账号锁定'},{label:'验证码过期'}]}]}]:[],
       approvals:state==='waiting'?[{id:'demo-approval',sessionId:'preview',title:'重构登录模块并补齐测试',at:Date.now(),toolName:'bash',reason:'运行测试需要执行命令',detail:{label:'命令',text:'npm test -- --coverage src/auth',mono:true}}]:[],
+      chat:{sessionId:'preview',title:'重构登录模块并补齐测试',running:busy,state,reply:busy?'':'登录模块已拆成 3 个文件，新增 14 个单元测试全部通过。\n\n验证码过期场景需要后端配合，我在 TODO 里留了说明。要我顺便把注册流程也按同样的方式拆一下吗？'},
       finished:[]};
     if(demo&&!history.length){
       const sample=[['修复首页加载白屏','completed',22,312,18],['写一份竞品对比表','completed',17,146,9],['整理接口文档','completed',9,205,14],['升级依赖并跑测试','error',3,88,6],['生成周报图表','completed',1.5,131,11]];
@@ -200,6 +215,7 @@ async function start() {
     if(message?.type==='prefs')applyPrefs(message.data);
     if(message?.type==='show')show();
     if(message?.type==='answer-result'&&typeof message.callId==='string'){answerResults={...Object.fromEntries(Object.entries(answerResults).filter(([,r])=>Date.now()-r.at<300000)),[message.callId]:{ok:!!message.ok,reason:String(message.reason||'').slice(0,80),at:Date.now()}};send();}
+    if(message?.type==='chat-result'&&typeof message.id==='string'){chatResults={...Object.fromEntries(Object.entries(chatResults).filter(([,r])=>Date.now()-r.at<300000)),[message.id]:{ok:!!message.ok,mode:message.mode,reason:String(message.reason||'').slice(0,80),at:Date.now()}};send();}
     if(message?.type==='approval-result'&&typeof message.id==='string'){approvalResults={...Object.fromEntries(Object.entries(approvalResults).filter(([,r])=>Date.now()-r.at<300000)),[message.id]:{ok:!!message.ok,reason:String(message.reason||'').slice(0,80),at:Date.now()}};send();}
     if(message?.type==='stats'&&statsWin&&!statsWin.isDestroyed())statsWin.webContents.send('stats:data',message.data??null);
     if(message?.type==='balance'){balance=message.data&&Array.isArray(message.data.wallets)?message.data:null;send();}
@@ -224,6 +240,7 @@ async function start() {
   },40);
   screen.on('display-metrics-changed',position); screen.on('display-removed',position);screen.on('display-added',position);
   app.on('second-instance',show);
+  win.on('blur',blurred);
   win.on('close',event=>{if(!quitting){event.preventDefault();hide();}});
   app.on('before-quit',()=>{quitting=true;statsWin?.destroy();clearInterval(cursorTimer);clearInterval(demoTimer);tray?.destroy();});
   if(process.send) process.send({type:'ready'});

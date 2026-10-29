@@ -53,6 +53,12 @@
           <input id="ask-custom" class="ask-custom" type="text" maxlength="2000" placeholder="或者输入你自己的回答…" aria-label="自定义回答">
           <div class="ask-actions"><span id="ask-status" class="ask-status" role="status"></span><button id="ask-skip" type="button" class="ask-skip">跳过</button><button id="ask-next" type="submit" class="ask-next">提交</button></div>
         </form>
+        <form id="chat" class="card chat" hidden autocomplete="off">
+          <div class="chat-top"><span class="chat-dot" aria-hidden="true"></span><span id="chat-title">继续对话</span><button id="chat-open" type="button" class="chat-link">在 Harness 中查看 ↗</button></div>
+          <div id="chat-reply" class="chat-reply" tabindex="0" aria-label="最近的回复" hidden></div>
+          <textarea id="chat-input" class="chat-input" rows="2" maxlength="8000" placeholder="给 Agent 发消息…  Enter 发送，Shift+Enter 换行" aria-label="给 Agent 发消息"></textarea>
+          <div class="ask-actions"><span id="chat-status" class="ask-status" role="status"></span><button id="chat-steer" type="button" class="ask-skip" title="插入正在进行的这一轮，Agent 下一步就会看到" hidden>插话</button><button id="chat-send" type="submit" class="ask-next chat-send">发送</button></div>
+        </form>
         <div id="task" class="card task">
           <div class="task-top"><span id="session-title">DeepSeek Harness</span><time id="elapsed"></time></div>
           <p id="status-detail">开始一个任务，让想法继续。</p>

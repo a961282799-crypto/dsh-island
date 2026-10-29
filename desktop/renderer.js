@@ -58,7 +58,7 @@ function burst(ms){
 }
 
 // 悬停：轻停片刻先舒展；停留更久（可在设置里关闭）直接展开面板，离开后收回。
-const busyHere=()=>!!(askOf()||approvalOf()||document.activeElement?.matches('select,input'));
+const busyHere=()=>!!(askOf()||approvalOf()||document.activeElement?.matches('select,input,textarea'));
 island.addEventListener('mouseenter',()=>{
   clearTimeout(leaveTimer);clearTimeout(peekTimer);clearTimeout(hoverTimer);
   if(expanded)return;
@@ -73,6 +73,14 @@ island.addEventListener('mouseleave',()=>{
 
 $('capsule').addEventListener('click',()=>{autoOpened=false;const pinned=hoverOpened;hoverOpened=false;clearTimeout(hoverTimer);if(pinned&&expanded){applyShape();return;}expand(!expanded);});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&expanded)expand(false);});
+// 点击灵动岛以外的地方即收起：按下时让窗口拿到焦点，失焦时收起（提问草稿保留，重新展开可继续）。
+island.addEventListener('pointerdown',()=>bridge.engage?.(),true);
+function dismiss(){
+  clearTimeout(leaveTimer);clearTimeout(hoverTimer);clearTimeout(peekTimer);
+  if(peek){peek=false;applyShape();}
+  if(expanded){autoOpened=false;expand(false);}
+}
+const offBlur=bridge.onBlur?.(dismiss);
 document.addEventListener('contextmenu',e=>{e.preventDefault();bridge.menu();});
 // 停止任务需要点两次：第一次变红确认，3 秒内再点才真正停止。
 function disarm(){clearTimeout(armTimer);$('stop').dataset.armed='false';$('stop-label').textContent='停止任务';}
@@ -186,6 +194,51 @@ function decide(outcome){const a=approvalOf();if(!a||sentApproval.has(a.id)||$('
 $('approve').addEventListener('submit',e=>{e.preventDefault();decide('allowed-once');});
 $('approve-reject').addEventListener('click',()=>decide('rejected'));
 
+// 继续对话：给当前（或最近一个）任务发消息，和在 Harness 输入框里发一样；任务进行中可以排队或插话。
+let chatSent=null,chatStatusTimer;
+function chatOf(){return current.prefs?.chat!==false?current.activity?.chat:null;}
+function renderChat(){
+  const c=chatOf();$('chat').hidden=!c;
+  if(!c)return false;
+  const details=current.prefs?.details!==false,running=!!c.running;
+  const onShow=current.activity?.sessionId===c.sessionId&&!['idle','offline'].includes(current.activity?.state);
+  $('chat-title').textContent=onShow?'给这个任务发消息':details&&c.title?c.title:'继续对话';
+  const text=running?`${STATES[c.state]?.label??'正在处理'}…`:details?(c.reply||''):'';
+  const box=$('chat-reply');box.classList.toggle('live',running);box.hidden=!text;
+  if(box.textContent!==text){box.textContent=text;box.scrollTop=0;}
+  $('chat-steer').hidden=!running;
+  $('chat-send').textContent=running?'排队':'发送';
+  $('chat-send').title=running?'这一轮结束后发送':'';
+  const r=chatSent&&current.chatResults?.[chatSent.id],sending=!!chatSent&&!r;
+  if(r){
+    if(r.ok&&!chatSent.done){if($('chat-input').value===chatSent.text){$('chat-input').value='';grow();}chatSent.done=Date.now();clearTimeout(chatStatusTimer);chatStatusTimer=setTimeout(()=>{if(chatSent?.done){chatSent=null;renderChat();}},4000);}
+    else if(!r.ok&&!chatSent.failed)chatSent.failed=true;
+  }
+  const empty=!$('chat-input').value.trim();
+  $('chat-input').disabled=sending;
+  $('chat-send').disabled=$('chat-steer').disabled=sending||empty;
+  const st=$('chat-status');
+  st.className='ask-status'+(r&&!r.ok?' err':r?.ok?' ok':'');
+  st.textContent=sending?'正在发送…':r?(r.ok?(r.mode==='steer'?'已插话，Agent 下一步会看到':chatSent.running?'已排队，这一轮结束后发送':'已发送'):r.reason||'发送失败'):'';
+  return true;
+}
+function grow(){const t=$('chat-input');t.style.height='auto';t.style.height=`${Math.min(96,t.scrollHeight+2)}px`;if(expanded)fitPanel();}
+function sendChat(mode){
+  const c=chatOf(),text=$('chat-input').value.trim();
+  if(!c||!text||(chatSent&&!current.chatResults?.[chatSent.id]))return;
+  const id=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  chatSent={id,text:$('chat-input').value,running:!!c.running};clearTimeout(chatStatusTimer);
+  bridge.chat(id,c.sessionId,text,mode);renderChat();
+}
+$('chat').addEventListener('submit',e=>{e.preventDefault();sendChat('queue');});
+$('chat-steer').addEventListener('click',()=>sendChat('steer'));
+$('chat-open').addEventListener('click',()=>bridge.open());
+$('chat-input').addEventListener('input',()=>{if(chatSent&&current.chatResults?.[chatSent.id]){chatSent=null;}grow();renderChat();});
+$('chat-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();if(!$('chat-send').disabled)sendChat('queue');}
+  if(e.key==='Escape')e.stopPropagation(),expand(false);
+});
+
 // 上下文占用：鲸鱼外圈按占用比例描边，70% 起变黄，90% 起变红。
 function contextOf(d){if(!d?.contextTokens||!d?.contextWindow)return null;return Math.min(100,Math.round(d.contextTokens/d.contextWindow*100));}
 function renderRing(state,d){
@@ -253,7 +306,10 @@ function renderPanel({activity:a,prefs={},history={},balance,preview}){
   const approving=renderApprove();
   if(approving)$('ask').hidden=true;
   const asking=!approving&&renderAsk();
-  if(approving||asking)for(const id of ['task','others','today','usage','recent','hint','reply'])$(id).hidden=true;
+  const chatting=renderChat();
+  if(approving||asking)for(const id of ['task','others','today','usage','recent','hint','reply','chat'])$(id).hidden=true;
+  // 对话卡里已经有最近的回复；空闲时收起柱状图和最近任务（用量窗口里都有），给输入框留出位置。
+  else if(chatting){$('reply').hidden=true;if(idle)for(const id of ['usage','recent','hint'])$(id).hidden=true;}
 }
 
 // 状态切换：文字与指示器做模糊交叉淡入，异常时整体轻摇。
@@ -312,4 +368,4 @@ function render(snapshot){
 const unsubscribe=bridge.subscribe(render);
 render(await bridge.initial());
 const timer=setInterval(tick,1000);
-window.addEventListener('beforeunload',()=>{unsubscribe();clearInterval(timer);cancelAnimationFrame(boundsFrame);clearTimeout(burstTimer);clearTimeout(peekTimer);clearTimeout(leaveTimer);clearTimeout(armTimer);clearTimeout(hoverTimer);});
+window.addEventListener('beforeunload',()=>{unsubscribe();offBlur?.();clearTimeout(chatStatusTimer);clearInterval(timer);cancelAnimationFrame(boundsFrame);clearTimeout(burstTimer);clearTimeout(peekTimer);clearTimeout(leaveTimer);clearTimeout(armTimer);clearTimeout(hoverTimer);});

@@ -75,6 +75,8 @@ window.__ModuleLoader__.load({
 			balanceHint: "空闲时在灵动岛里显示 DeepSeek 账户余额（需在 设置 › 账户 中登录 DeepSeek 账号）。",
 			approvals: "在灵动岛批准权限请求",
 			approvalsHint: "Agent 需要授权时（如执行命令、修改文件），灵动岛显示要做什么，可直接“允许一次”或“拒绝”；Harness 窗口里也照常可批，先批的生效。始终允许等持久授权仍在 Harness 中设置。",
+			chat: "在灵动岛给 Agent 发消息",
+			chatHint: "展开面板里有输入框，可以接着当前或最近的任务对话，不用打开 Harness；任务进行中可以排队（这一轮结束后发送）或插话。消息和在 Harness 输入框里发的一样，会出现在对话记录里。",
 			hoverExpand: "悬停展开面板",
 			hoverExpandHint: "鼠标在灵动岛上停留片刻即展开面板，移开后自动收起；关闭后需要点击展开。",
 			reduceMotion: "减少动态效果",
@@ -107,6 +109,8 @@ window.__ModuleLoader__.load({
 			balanceHint: "Show your DeepSeek account balance when idle (requires signing in under Settings › Account).",
 			approvals: "Approve permission requests in the island",
 			approvalsHint: "When the agent needs permission (running a command, editing a file), the island shows what it wants to do so you can allow once or reject; Harness can still answer too, and whichever is first counts. Persistent grants stay in Harness.",
+			chat: "Message the agent from the island",
+			chatHint: "The panel has a message box to continue the current or latest task without opening Harness; while a task runs you can queue a message for after this turn or steer the turn. Messages are the same as ones typed in Harness and appear in the conversation.",
 			hoverExpand: "Expand on hover",
 			hoverExpandHint: "Resting the pointer on the island opens the panel and moving away closes it; when off, click to expand.",
 			reduceMotion: "Reduce motion",
@@ -122,7 +126,7 @@ window.__ModuleLoader__.load({
 
 		const ENTRY = "dsh-island";
 		const NS = "settings.dshIsland";
-		const DEFAULTS = { enabled: true, position: "top-center", size: "medium", reduceMotion: false, popups: true, details: true, balance: true, questions: true, approvals: true, hoverExpand: true };
+		const DEFAULTS = { enabled: true, position: "top-center", size: "medium", reduceMotion: false, popups: true, details: true, balance: true, questions: true, approvals: true, chat: true, hoverExpand: true };
 		const SPOTS = [
 			["top-left", { left: 6, top: 6 }], ["top-center", { left: 90, top: 6 }], ["top-right", { right: 6, top: 6 }],
 			["left-center", { left: 6, top: 45 }, true], ["right-center", { right: 6, top: 45 }, true], ["bottom-center", { left: 90, bottom: 16 }]
@@ -175,6 +179,7 @@ window.__ModuleLoader__.load({
 					jsx(Row, { label: t("details"), hint: t("detailsHint"), children: jsx(Switch, { checked: value("details"), label: t("details"), disabled, onChange: (v) => set("details", v) }) }),
 					jsx(Row, { label: t("questions"), hint: t("questionsHint"), children: jsx(Switch, { checked: value("questions"), label: t("questions"), disabled, onChange: (v) => set("questions", v) }) }),
 					jsx(Row, { label: t("approvals"), hint: t("approvalsHint"), children: jsx(Switch, { checked: value("approvals"), label: t("approvals"), disabled, onChange: (v) => set("approvals", v) }) }),
+					jsx(Row, { label: t("chat"), hint: t("chatHint"), children: jsx(Switch, { checked: value("chat"), label: t("chat"), disabled, onChange: (v) => set("chat", v) }) }),
 					jsx(Row, { label: t("hoverExpand"), hint: t("hoverExpandHint"), children: jsx(Switch, { checked: value("hoverExpand"), label: t("hoverExpand"), disabled, onChange: (v) => set("hoverExpand", v) }) }),
 					jsx(Row, { label: t("balance"), hint: t("balanceHint"), children: jsx(Switch, { checked: value("balance"), label: t("balance"), disabled, onChange: (v) => set("balance", v) }) }),
 					jsx(Row, { label: t("reduceMotion"), hint: t("reduceMotionHint"), children: jsx(Switch, { checked: value("reduceMotion"), label: t("reduceMotion"), disabled, onChange: (v) => set("reduceMotion", v) }) })

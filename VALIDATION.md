@@ -44,3 +44,10 @@
 - 用量窗口在模拟数据下检查今天/7 天/30 天、悬停提示、展开会话、窄窗口无横向滚动、缩放窗口不重播动画。
 - `tests/desktop.mjs` 已加入审批、回复预览和用量窗口步骤，需在 Windows 本机运行确认；尚未在真实 Harness 中触发审批或核对真实账单。
 
+
+## v0.6 点外面收起、在灵动岛发消息（2026-10-29）
+
+- 对照 Harness 0.2.1-rc.3 的 `dsh-api-session-controller`：`sessionController.prompt({ requestId, sessionId, mode: 'queue' | 'steer', content, clientTimeZone }, signal)` 与 Harness 输入框同一入口；`queue` 空闲时开始新一轮、运行中进入下一轮队列，`steer` 插入运行中的这一轮；冷会话由 `resolveAgent` 自动恢复。
+- `npm test` 32 项通过（新增 4 项：对话目标只取顶层任务且在 store 清理后保留、排队/插话请求结构、本轮结束后插话降级为排队、空消息/换对话/关闭开关/旧版 Harness/错误码提示、隐藏任务内容时不带标题和回复）。
+- 浏览器模拟桥接检查：单击展开、悬停展开、自动弹出的提问卡在失焦时收起，提问草稿保留，Esc 照常；对话卡空闲/进行中两种布局、Shift+Enter 换行、Enter 发送、发送中禁用、成功清空、失败保留原文并显示原因、审批/提问时隐藏对话卡、关闭开关后隐藏；空闲与预览模式下面板底部不被裁切（窗口高度 460 → 540）。
+- 尚未在 Windows 上运行 `npm run test:desktop`，也未在真实 Harness 中从灵动岛发出消息；需要安装后确认中文输入法回车、失焦收起和消息出现在 Harness 对话记录中。

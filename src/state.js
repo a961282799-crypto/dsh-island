@@ -17,7 +17,8 @@ const clip = (value, max = 100) => typeof value === 'string' ? value.replace(/[\
 const count = value => Number.isFinite(value) && value > 0 ? value : 0;
 
 // Crosses the process boundary: state, titles, the agent's own plan items, tool names,
-// model id and token counts. Never prompts, replies, reasoning or tool arguments.
+// model id, token counts and the final reply of a finished turn. Never prompts, reasoning,
+// in-progress text or tool arguments.
 export class ActivityStore {
   constructor(now = Date.now) { this.now = now; this.sessions = new Map(); this.finished = []; }
   entry(id) {
@@ -76,7 +77,7 @@ export class ActivityStore {
       case 'request/context': if (Number.isFinite(d.contextWindow) && d.contextWindow > 0) e.contextWindow = d.contextWindow; break;
       case 'assistant/message': {
         const text = Array.isArray(d.message?.content) ? d.message.content.filter(b => b?.type === 'text' && typeof b.text === 'string').map(b => b.text).join(' ') : '';
-        if (text.trim()) e.lastText = clip(text.replace(/[#*`>_~|]+/g, ' ').replace(/\s+/g, ' '), 160);
+        if (text.trim()) e.lastText = text.replace(/\r\n?/g, '\n').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ' ').replace(/```[^\n]*\n?/g, '').replace(/^#{1,6}\s+/gm, '').replace(/\*\*|__|`/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 4000);
         const u = d.usage;
         if (u && typeof u === 'object') {
           e.contextTokens = count(u.inputTokens) + count(u.cacheReadTokens) + count(u.cacheWriteTokens);

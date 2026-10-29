@@ -300,6 +300,21 @@ p{margin:3px 0 0;font-size:11.5px;line-height:1.5;color:var(--muted)}
 .reply-head{display:flex;align-items:center;gap:7px;font-size:11px;color:#9ff0c6}
 .reply-hint{margin-left:auto;font-size:10px;color:var(--faint)}
 .reply-dot{width:7px;height:7px;border-radius:50%;background:#3ddc91}
+.chat{display:flex;flex-direction:column;gap:8px;margin:0;border-color:color-mix(in srgb,var(--ds-blue) 32%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--ds-blue) 9%,transparent),rgba(255,255,255,.03))}
+.chat-top{display:flex;align-items:center;gap:8px;font-size:11px;color:#b9c6ff}
+.chat-top #chat-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--ds-blue)}
+.chat-link{flex:none;height:20px;padding:0 4px;border-radius:6px;font-size:10px;color:var(--faint)}
+.chat-link:hover{background:rgba(255,255,255,.06);color:#e5e9f7}
+.chat-reply{margin:0;font-size:12px;line-height:1.55;color:#e8ecf8;white-space:pre-wrap;word-break:break-word;max-height:calc(1.55em * 5);overflow:auto;padding-right:4px;user-select:text;outline:none}
+.chat-reply.live{color:var(--muted)}
+.chat-reply::-webkit-scrollbar{width:4px}.chat-reply::-webkit-scrollbar-thumb{border-radius:2px;background:rgba(255,255,255,.18)}
+.chat-input{box-sizing:border-box;display:block;width:100%;min-height:50px;max-height:96px;resize:none;padding:7px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.35);color:#f3f5ff;font:inherit;font-size:12px;line-height:1.5;outline:none;transition:border-color .2s,box-shadow .2s}
+.chat-input::placeholder{color:#5f6780}
+.chat-input:focus{border-color:color-mix(in srgb,var(--ds-blue) 70%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--ds-blue) 22%,transparent)}
+.chat-input:disabled{opacity:.6}
+.ask-next.chat-send{background:var(--ds-blue);color:#fff}
+.ask-next.chat-send:hover{background:var(--ds-blue-hi)}
 #reply-text{margin:6px 0 0;font-size:12px;line-height:1.55;color:#e8ecf8;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .ghost{height:30px;padding:0 10px;border-radius:10px;font-size:11.5px;color:var(--muted)}
 .ghost:hover{background:rgba(255,255,255,.06);color:#e5e9f7}
