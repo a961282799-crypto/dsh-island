@@ -1,6 +1,6 @@
 {
   "name": "dsh-island",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "DeepSeek Harness 桌面灵动岛插件：实时任务状态、上下文占用、在灵动岛批准权限与回答提问、用量与费用统计（社区插件）",
   "type": "module",
   "license": "MIT",
@@ -44,7 +44,7 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh": "0.2.1-rc.3",
+    "@deepseek-ai/dsh": "0.2.1-rc.5",
     "@deepseek-ai/schemastery": "~3.18.5"
   },
   "peerDependenciesMeta": {

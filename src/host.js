@@ -78,7 +78,7 @@ export function islandSnapshot(ctx, store, known, desk, extra = {}) {
 const wallets = list => (Array.isArray(list) ? list : []).filter(w => w && ['CNY','USD'].includes(w.currency) && typeof w.balance === 'string' && /^-?\d+(\.\d+)?$/.test(w.balance)).map(w => ({ currency: w.currency, balance: w.balance }));
 let harnessVersion;
 const clientInfo = () => {
-  if (harnessVersion === undefined) { try { harnessVersion = createRequire(import.meta.url)('@deepseek-ai/dsh-deepseek-account/package.json').version; } catch { harnessVersion = '0.2.1-rc.3'; } }
+  if (harnessVersion === undefined) { try { harnessVersion = createRequire(import.meta.url)('@deepseek-ai/dsh-deepseek-account/package.json').version; } catch { harnessVersion = '0.2.1-rc.5'; } }
   return { version: harnessVersion, locale: Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN', timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60 };
 };
 /**

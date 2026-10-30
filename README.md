@@ -22,7 +22,7 @@ DeepSeek Harness 的桌面灵动岛插件：像 iPhone 灵动岛一样停在屏�
 
 ## 安装
 
-需要 **DeepSeek Harness 桌面版 0.2.1-rc.3**（Windows）。
+需要 **DeepSeek Harness 桌面版 0.2.1-rc.5**（Windows）。
 
 - **在 Harness 里安装**：侧栏「插件」→「添加插件」，输入 `dsh-island`，安装后启用。
 - **命令行**：先从托盘退出 Harness，再运行 `dsh plugin --profile desktop add dsh-island`。
@@ -143,7 +143,7 @@ Agent 要执行需要授权的操作（运行命令、修改文件、访问网�
 
 ## 从源码安装与卸载
 
-适配并检查的版本：**DeepSeek Harness Desktop 0.2.1-rc.3 / Windows**。
+适配并检查的版本：**DeepSeek Harness Desktop 0.2.1-rc.5 / Windows**。
 
 双击项目里的 **安装到 Harness.cmd** 即可（会先询问是否关闭 Harness，装完自动重新打开；会在常见安装位置和正在运行的 Harness 中查找 `dsh.cmd`）。也可以先从托盘退出 Harness，然后运行：
 

@@ -25,7 +25,7 @@ async function main(){
     await ctx.parallel('session/event',session,{type:'turn/end',data:{reason:{kind:'completed'}}});
     assert.equal(s.snapshot().state,'completed');
     detach();const before=updates;await ctx.parallel('agent/error',{agent,error:new Error('synthetic')});assert.equal(updates,before);
-    console.log('PASS installed Harness 0.2.1-rc.3 compatibility, real Cordis event dispatch and listener cleanup');
+    console.log('PASS installed Harness '+manifest.peerDependencies['@deepseek-ai/dsh']+' compatibility, real Cordis event dispatch and listener cleanup');
   }finally{await owner.dispose();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

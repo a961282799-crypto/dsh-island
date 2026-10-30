@@ -51,3 +51,9 @@
 - `npm test` 32 项通过（新增 4 项：对话目标只取顶层任务且在 store 清理后保留、排队/插话请求结构、本轮结束后插话降级为排队、空消息/换对话/关闭开关/旧版 Harness/错误码提示、隐藏任务内容时不带标题和回复）。
 - 浏览器模拟桥接检查：单击展开、悬停展开、自动弹出的提问卡在失焦时收起，提问草稿保留，Esc 照常；对话卡空闲/进行中两种布局、Shift+Enter 换行、Enter 发送、发送中禁用、成功清空、失败保留原文并显示原因、审批/提问时隐藏对话卡、关闭开关后隐藏；空闲与预览模式下面板底部不被裁切（窗口高度 460 → 540）。
 - 尚未在 Windows 上运行 `npm run test:desktop`，也未在真实 Harness 中从灵动岛发出消息；需要安装后确认中文输入法回车、失焦收起和消息出现在 Harness 对话记录中。
+
+## v0.6.1 适配 Harness 0.2.1-rc.5（2026-10-30）
+
+- 宿主升级到 0.2.1-rc.5 后，0.6.0 的精确兼容声明 `@deepseek-ai/dsh: 0.2.1-rc.3` 会被宿主版本检查拒绝；兼容声明更新为 rc.5，未使用版本豁免。
+- 对照 npm 发布的 rc.3 与 rc.5：`@deepseek-ai/dsh` 的 86 个依赖只有版本号变化，Cordis 仍为 ~4.0.5；本插件读取的 `dsh-app-boot`、`dsh-agent`、`dsh-agent-loop`、`dsh-api-session-controller`、`dsh-session`、`dsh-session-projection`、`dsh-user-approval`、`dsh-user-questions`、`dsh-client-ui-settings`、`dsh-client-locale`、`dsh-deepseek-account` 等包除 package.json 外逐字节一致。运行代码只更新宿主版本的回退值。
+- `npm test` 通过。真实宿主契约（`npm run test:host`）与桌面窗口检查（`npm run test:desktop`）需在本机升级后的 Harness 上运行。
