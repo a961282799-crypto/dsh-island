@@ -6,8 +6,9 @@ async function main(){
   const req=createRequire(process.env.DSH_HOST_PACKAGE||'D:/deepseek harness/resources/app.asar/dsh/package.json');
   const manifest=require('../package.json');
   const {evaluatePluginCompatibility}=req('@deepseek-ai/dsh-app-boot');
-  assert.equal(req('./package.json').version,manifest.peerDependencies['@deepseek-ai/dsh']);
+  const {satisfies}=req('semver');
   assert.equal(evaluatePluginCompatibility(manifest),undefined);
+  assert.equal(satisfies(req('./package.json').version,manifest.peerDependencies['@deepseek-ai/dsh'],{includePrerelease:true}),true);
   const {Context}=req('@deepseek-ai/cordis');
   const {attachActivity}=await import(pathToFileURL(path.join(__dirname,'../src/host.js')));
   const {ActivityStore}=await import(pathToFileURL(path.join(__dirname,'../src/state.js')));
