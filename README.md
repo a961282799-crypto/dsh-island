@@ -201,6 +201,27 @@ npm run pack:plugin
 
 真实模型任务、网络重试和确认流程的完整现场验收与合成事件测试不同；具体已验证范围见 `VALIDATION.md`。
 
+## 发布
+
+走 npm 的 **Trusted Publisher（OIDC）**：CI 里不放 token、不输验证码，发布记录带 provenance。推一个 `v<version>` 标签，或在 GitHub Actions 里手动运行 `publish` workflow 即可；workflow 会先检查标签与 `package.json` 版本一致，再跑 `npm test`，最后 `npm publish --provenance`。
+
+一次性配置在 npmjs.com → **dsh-island** → Settings → **Trusted publishing** → GitHub Actions：
+
+| 字段 | 值 |
+| --- | --- |
+| Organization/user | `a961282799-crypto` |
+| Repository | `dsh-island` |
+| Workflow filename | `publish.yml` |
+| Allowed actions | `npm publish` |
+
+也可以用命令行建这条信任关系（需要 npm 11.15+，会要一次 OTP）：
+
+```powershell
+npm trust github dsh-island --file publish.yml --repo a961282799-crypto/dsh-island --allow-publish
+```
+
+`scripts/publish.ps1` 里的本地发布路径仍然可用，但账号开了「auth-and-writes」两步验证后，`npm publish` 会要求一次性验证码。
+
 ## 致谢
 
 面板中的余额、24 小时 token 柱状图、缓存命中率和在灵动岛回答提问参考了 [Agent HUD](https://github.com/jazzenchen/agent-hud-native-open)（Apache-2.0）的设计思路；本项目未使用其代码。
