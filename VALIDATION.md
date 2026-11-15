@@ -65,3 +65,11 @@
 - `userQuestions` 的提问新增 `intent.kind = 'approval'`（只有批准/拒绝的权限决定）。灵动岛只接管没有 `intent` 的普通提问，新增类型与计划审阅一样留在 Harness 中回答，行为不变。
 - 设置页新增可选的 `settings.section.icon` 插槽，本插件未使用，沿用默认图标。
 - 运行代码只更新宿主版本的回退值。`npm test` 通过。真实宿主契约（`npm run test:host`）与桌面窗口检查（`npm run test:desktop`）需在本机升级后的 Harness 上运行。
+
+## v0.6.4 首次安装不再静默失败（2026-11-15，修复 #1）
+
+- 现象与根因（来自 issue #1，已对照代码确认）：运行环境只查 `DSH_ISLAND_ELECTRON` 和 dsh-orb 两个固定位置；找不到时 `apply()` 的 catch 只写一条 `ctx.logger.warn`，桌面版从托盘启动时看不到输出；子进程 stderr 被丢弃；失败后不重试。干净机器上的表现就是「插件已启用、设置页正常、屏幕上没有灵动岛」。
+- 修复：`src/runtime.js` 顺序返回候选路径并给出可照做的修复说明，dsh-orb 目录校验 `.complete-*` 完成标记（没有标记但已有 electron 时仍使用，只记为未验证）；`src/host.js` 失败时写 `runtime-status.json`（原因、已查找路径、stderr 尾部）和 `runtime-help.txt`、记 error 日志、在 Windows 上弹一次原生提示（VBScript + MsgBox，点“是”用记事本打开说明），并按 15 秒 / 1 分钟 / 5 分钟重试，设置页任意改动也会立即重试；保留 Electron stderr 最后 20 行；`desktop/main.cjs` 把 Chromium 的 userData 移到 `dsh-island/electron`，不再与 `usage.json`、`settings.json` 混在同一目录。
+- 设置页与 README 补上前置条件（需要 Electron 运行环境）和「灵动岛没有出现？」的排错步骤；README 主安装章节不再只在「从源码安装」里提这件事。
+- `npm test` 40 项通过（39 通过、1 跳过）；真实 Cordis 契约测试新增一项：缺少运行环境时 `apply()` 不抛错，且写出 `state=missing` 的状态文件与修复说明（`npm run test:host` 通过）。
+- 尚未在干净机器上走完整首次安装（本机已有 dsh-orb 运行时）；弹出提示只用单元测试检查生成的 VBScript，没有人工确认弹窗外观；`npm run test:desktop` 需在本机重跑。

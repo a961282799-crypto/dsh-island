@@ -59,6 +59,7 @@ window.__ModuleLoader__.load({
 			nav: "灵动岛",
 			title: "灵动岛",
 			intro: "桌面上的 DeepSeek 灵动岛会实时显示任务状态。这里的修改会立即应用到灵动岛。",
+			runtimeHint: "如果灵动岛始终没有出现：通常是缺少 Electron 运行环境。安装悬浮球插件 dsh-orb（会自动下载），或把用户环境变量 DSH_ISLAND_ELECTRON 指向 electron.exe，然后重新打开 Harness；原因写在 %USERPROFILE%\\.dsh\\dsh-island\\runtime-help.txt。",
 			enabled: "显示灵动岛",
 			enabledHint: "关闭后灵动岛隐藏；也可以随时点击系统托盘里的蓝色鲸鱼。",
 			position: "停靠位置",
@@ -93,6 +94,7 @@ window.__ModuleLoader__.load({
 			nav: "Island",
 			title: "DeepSeek Island",
 			intro: "The desktop island shows your task status live. Changes here apply to it immediately.",
+			runtimeHint: "If the island never appears, Electron is usually missing: install the dsh-orb plugin (it downloads one) or point the DSH_ISLAND_ELECTRON environment variable at electron.exe, then reopen Harness. Details: %USERPROFILE%\\.dsh\\dsh-island\\runtime-help.txt.",
 			enabled: "Show the island",
 			enabledHint: "Turn off to hide it; the blue whale in the system tray brings it back.",
 			position: "Position",
@@ -158,6 +160,7 @@ window.__ModuleLoader__.load({
 			return jsxs("div", { className: "dshi-section", children: [
 				jsx("h2", { className: "dshi-heading", children: t("title") }),
 				jsx("p", { className: "dshi-intro", children: t("intro") }),
+				jsx("p", { className: "dshi-note", children: t("runtimeHint") }),
 				status && jsx("p", { className: "dshi-note" + (failed ? " warn" : ""), role: "status", children: status }),
 				jsxs("div", { className: "dshi-card", children: [
 					jsxs("div", { className: "dshi-place", children: [

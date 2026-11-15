@@ -5,7 +5,9 @@ const { pathToFileURL } = require('node:url');
 const demo = process.argv.includes('--preview');
 const dataArg = process.argv.find(v=>v.startsWith('--island-data='));
 const dataDir = dataArg ? dataArg.slice('--island-data='.length) : path.join(app.getPath('userData'),'dsh-island');
-app.setPath('userData',dataDir);
+// Chromium 自己的 blob_storage、Cache、GPUCache、SingletonLock 等放在子目录里，
+// 不要和 usage.json / settings.json 混在同一个目录。
+app.setPath('userData',path.join(dataDir,'electron'));
 app.setName('DeepSeek Island');
 const single = app.requestSingleInstanceLock();
 if(!single) app.quit();

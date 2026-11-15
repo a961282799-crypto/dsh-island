@@ -30,6 +30,8 @@ DeepSeek Harness 的桌面灵动岛插件：像 iPhone 灵动岛一样停在屏�
 
 装好后，位置、大小等选项在 Harness 的「设置 › 灵动岛」中调整。
 
+> **还需要一个 Electron 运行环境**（安装归档不含、也不会自动下载）：装好悬浮球插件 **dsh-orb** 后本插件会复用它下载的运行时；或者自备任意 Electron，把环境变量 `DSH_ISLAND_ELECTRON` 指向 `electron.exe`。找不到运行环境时灵动岛不会出现，插件会说明原因并自动重试，见下文「[灵动岛没有出现？](#灵动岛没有出现)」。
+
 ## 形态
 
 | 形态 | 尺寸（适中） | 何时出现 |
@@ -159,7 +161,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-desktop.ps1 
 
 安装由官方 `dsh plugin --profile desktop add` 完成。本插件不修改悬浮球插件或宿主安装目录，不增加开机自启。设置保存在 `%USERPROFILE%\.dsh\dsh-island\settings.json`。退出 Harness 或停用插件后，窗口随宿主关闭。
 
-运行环境复用当前机器已有的 `%USERPROFILE%\.dsh\dsh-orb\electron-runtime\electron.exe`。它不是独立安装包：在其他机器上需要已有 Electron，或使用环境变量 `DSH_ISLAND_ELECTRON` 指定其路径。安装归档不含 Electron，不会自动下载运行环境。可用 `DSH_HOME` 指定 Harness 数据根目录。
+运行环境按顺序查找：环境变量 `DSH_ISLAND_ELECTRON` → `%USERPROFILE%\.dsh\dsh-orb\electron-runtime\electron.exe`（dsh-orb 下载完成后会写 `.complete-*` 标记，用于区分下载中的残留）。它不是独立安装包：安装归档不含 Electron，不会自动下载运行环境。可用 `DSH_HOME` 指定 Harness 数据根目录。
+
+## 灵动岛没有出现？
+
+插件已启用、设置页也正常，但屏幕上没有灵动岛：几乎都是找不到 Electron 运行环境（Harness 自带的 Electron 有自己的 `app.asar` 和单实例锁，不能复用）。这时插件不会静默失败：
+
+- Windows 上弹出一次提示框，点「是」用记事本打开完整说明；
+- 说明文件：`%USERPROFILE%\.dsh\dsh-island\runtime-help.txt`；状态文件：`%USERPROFILE%\.dsh\dsh-island\runtime-status.json`（失败原因、已查找的路径、Electron 最后的输出）；
+- Harness 日志里同时有一条 error，内容一样。
+
+解决办法（任选其一）：
+
+1. 安装悬浮球插件 dsh-orb，它会下载 Electron，本插件自动复用；
+2. 自备任意 Electron（43 及以上），把用户环境变量 `DSH_ISLAND_ELECTRON` 设为 `electron.exe` 的完整路径。
+
+改完不必重启 Harness：插件会在 15 秒、1 分钟、5 分钟后各重试一次；也可以在「设置 › 灵动岛」里改动任意选项立刻重试。
 
 ## 动画预览
 

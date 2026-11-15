@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { ActivityStore } from './state.js';
-import { runtimePath } from './runtime.js';
+import { resolveRuntime, runtimeHelp } from './runtime.js';
+import { promptRuntimeHelp, runtimeHelpText } from './notify.js';
 import { Config, readPrefs } from './settings.js';
 import { QuestionDesk } from './questions.js';
 import { ApprovalDesk } from './approvals.js';
@@ -154,15 +156,74 @@ export function apply(ctx, config = {}) {
       const balanceChanged = next.balance !== prefs.balance;
       prefs = next; desk.enabled = prefs.questions; approvals.enabled = prefs.approvals; chat.enabled = prefs.chat; message({ type: 'prefs', data: prefs }); publish();
       if (balanceChanged) refreshBalance(true);
+      // 设置页改动也是“再试一次”的入口：用户刚装好运行环境时不必重启 Harness。
+      if (!child) launch();
     });
-    try {
-      child=spawn(runtimePath(env),[fileURLToPath(new URL('../desktop/main.cjs',import.meta.url)),`--island-data=${dataDir}`],{
-        env, windowsHide:true, stdio:['ignore','ignore','pipe','ipc']
-      });
-      child.stderr.on('data',()=>{});
-      child.on('error',error=>ctx.logger.warn(`灵动岛启动失败：${error.message}`));
-      child.on('message',msg=>{
-        if(msg?.type==='ready'){ last=''; message({ type: 'prefs', data: prefs }); send(); setTimeout(() => refreshBalance(true), 3000).unref?.(); }
+
+    // 桌面窗口跑在独立的 Electron 里。运行环境缺失、Electron 起不来或中途崩溃都不能静默失败：
+    // 写状态文件、记 error 日志，并在 Windows 上弹一次原生提示（否则用户只会看到“插件已启用但没效果”）。
+    const statusFile = join(dataDir, 'runtime-status.json');
+    const helpFile = join(dataDir, 'runtime-help.txt');
+    const stderrTail = [];
+    let status = { state: 'starting', at: Date.now() }, retries = 0, retryTimer;
+
+    const writeJson = (file, value) => {
+      try {
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(`${file}.tmp`, `${JSON.stringify(value, null, 2)}\n`);
+        renameSync(`${file}.tmp`, file);
+      } catch {}
+    };
+    const noteStatus = patch => { status = { ...status, ...patch, at: Date.now() }; writeJson(statusFile, status); };
+    const captureStderr = chunk => {
+      for (const line of String(chunk).split(/\r?\n/)) if (line.trim()) stderrTail.push(line.trim().slice(0, 300));
+      if (stderrTail.length > 20) stderrTail.splice(0, stderrTail.length - 20);
+    };
+    // 失败后按 15s / 1min / 5min 再试：dsh-orb 的下载往往要几分钟，装完不必重启 Harness。
+    // 之后只要还是“缺运行环境”就每 10 分钟再看一眼；崩溃类失败不再无限重试。
+    const retryLater = () => {
+      if (stopped || child) return;
+      const delays = [15000, 60000, 300000];
+      if (retries >= delays.length && status.state !== 'missing') return;
+      const delay = retries < delays.length ? delays[retries] : 600000;
+      retries++;
+      retryTimer = setTimeout(() => { retryTimer = undefined; launch(); }, delay);
+      retryTimer.unref?.();
+    };
+    const report = text => { try { ctx.logger?.error?.(text); } catch {} };
+    const fail = reason => {
+      const missing = /运行环境/.test(reason);
+      noteStatus({ state: missing ? 'missing' : 'failed', reason, tried: missing ? status.tried ?? [] : undefined, stderr: stderrTail.slice() });
+      report(`[dsh-island] 灵动岛没有显示：${reason}\n${missing ? runtimeHelp(status.tried ?? []) : '详情见 ' + statusFile}`);
+      if (!status.announced && prefs.enabled) {
+        try { writeFileSync(helpFile, '\uFEFF' + runtimeHelpText({ reason, tried: status.tried ?? [], stderr: stderrTail }), 'utf8'); } catch {}
+        noteStatus({ announced: true });
+        const shown = promptRuntimeHelp({ dataDir, file: helpFile, lines: ['灵动岛没有显示。', reason, '', '点“是”查看两条解决办法。'] });
+        report(`[dsh-island] 修复说明已写入 ${helpFile}${shown ? '（已弹出提示）' : ''}`);
+      }
+      retryLater();
+    };
+    const launch = () => {
+      if (stopped || child) return;
+      const found = resolveRuntime(env);
+      noteStatus({ state: 'starting', tried: found.tried, runtime: found.path, source: found.source, verified: found.verified, stderr: [] });
+      if (!found.path) { fail(found.error.split('\n')[0]); return; }
+      try {
+        child = spawn(found.path, [fileURLToPath(new URL('../desktop/main.cjs', import.meta.url)), `--island-data=${dataDir}`], {
+          env, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc']
+        });
+      } catch (error) { child = null; fail(`无法启动 Electron：${error.message}`); return; }
+      const proc = child;
+      stderrTail.length = 0;
+      proc.stderr.on('data', captureStderr);
+      proc.on('error', error => { if (proc !== child) return; child = null; fail(`无法启动 Electron：${error.message}`); });
+      proc.on('message', msg => {
+        if (msg?.type === 'ready') {
+          retries = 0; last = '';
+          noteStatus({ state: 'running', announced: false, stderr: [] });
+          try { rmSync(helpFile, { force: true }); } catch {}
+          message({ type: 'prefs', data: prefs }); send(); setTimeout(() => refreshBalance(true), 3000).unref?.();
+        }
         if(msg?.type==='panel-open') refreshBalance();
         if(msg?.type==='answer' && typeof msg.callId==='string'){ const result = desk.answer(msg.callId, msg.answers, rootsOf(ctx)); message({ type: 'answer-result', callId: msg.callId, ...result }); publish(); }
         if(msg?.type==='stop' && stopSession(ctx, msg.sessionId)) publish();
@@ -170,10 +231,18 @@ export function apply(ctx, config = {}) {
         if(msg?.type==='chat' && typeof msg.id==='string'){ chat.send(msg.sessionId, msg.text, msg.mode).then(result => { message({ type: 'chat-result', id: msg.id, ...result }); publish(); }); }
         if(msg?.type==='stats'){ message({ type: 'stats', data: ledger.stats(['today','7d','30d'].includes(msg.range) ? msg.range : '7d') }); if (!ledger.sessions.size) backfill(); }
       });
-      child.on('exit',code=>{ if(!stopped && code)ctx.logger.warn(`灵动岛窗口已退出 (${code})，重新启用插件可恢复。`); });
-    } catch(error) { ctx.logger.warn(error.message); }
+      proc.on('exit', (code, signal) => {
+        if (proc !== child) return;
+        const tail = stderrTail.length ? `：${stderrTail.at(-1)}` : '';
+        child = null;
+        if (stopped) return;
+        if (!code && !signal) { noteStatus({ state: 'closed' }); return; }
+        fail(`灵动岛窗口已退出（${code ?? signal ?? '未知'}）${tail}`);
+      });
+    };
+    launch();
     const timer=setInterval(publish,1000); timer.unref();
     const balanceTimer=setInterval(() => refreshBalance(true), 10 * 60000); balanceTimer.unref();
-    return () => { stopped=true; detach(); offDesk?.(); offApprovals?.(); offLedger?.(); backfillAbort.abort(); clearTimeout(backfillFirst); clearInterval(backfillTimer); ledger.save(); offSettings?.(); clearInterval(timer); clearInterval(balanceTimer); clearTimeout(pending); if(child?.connected)child.send({type:'shutdown'}); setTimeout(()=>{if(child?.exitCode===null)child.kill();},1500).unref(); };
+    return () => { stopped=true; clearTimeout(retryTimer); detach(); offDesk?.(); offApprovals?.(); offLedger?.(); backfillAbort.abort(); clearTimeout(backfillFirst); clearInterval(backfillTimer); ledger.save(); offSettings?.(); clearInterval(timer); clearInterval(balanceTimer); clearTimeout(pending); if(child?.connected)child.send({type:'shutdown'}); setTimeout(()=>{if(child?.exitCode===null)child.kill();},1500).unref(); };
   });
 }
