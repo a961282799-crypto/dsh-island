@@ -4,3 +4,6 @@ node_modules/
 .qa/
 artifacts/
 *.log
+
+# dsh-island-go lives here as its own git repo (separate package, see go/README.md)
+/go/
