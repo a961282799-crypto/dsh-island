@@ -222,6 +222,18 @@ npm trust github dsh-island --file publish.yml --repo a961282799-crypto/dsh-isla
 
 `scripts/publish.ps1` 里的本地发布路径仍然可用，但账号开了「auth-and-writes」两步验证后，`npm publish` 会要求一次性验证码。
 
+## 支持作者
+
+项目免费开源、没有广告，也不打算加。如果这个插件让你少盯了几次终端，欢迎请我喝杯咖啡——完全自愿，不影响任何功能，也不影响后续更新。
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/a961282799-crypto/dsh-island/main/assets/donate-wechat.jpg" width="220" alt="微信赞赏码">
+
+<sub>手机上：长按图片保存 → 微信「扫一扫」→ 从相册选取</sub>
+
+</div>
+
 ## 致谢
 
 面板中的余额、24 小时 token 柱状图、缓存命中率和在灵动岛回答提问参考了 [Agent HUD](https://github.com/jazzenchen/agent-hud-native-open)（Apache-2.0）的设计思路；本项目未使用其代码。
